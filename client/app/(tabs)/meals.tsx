@@ -1,13 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import TotalCalCount from '@/components/TotalCalCount';
 import MealsList from '@/components/MealsList';
 import AddMeals from '@/components/AddMeals';
+import { supabase } from '@/constants/supabase';
 
 export default function MealsScreen() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingMeal, setEditingMeal] = useState(null);
+
+  const clearOldMeals = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const { data: lastMeal } = await supabase
+      .from('Meals')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (lastMeal && lastMeal.length > 0) {
+      const lastMealDate = new Date(lastMeal[0].created_at).toISOString().split('T')[0];
+      
+      if (lastMealDate !== today) {
+        await supabase.from('Meals').delete().neq('id', 0);
+        setRefreshTrigger(prev => prev + 1);
+      }
+    }
+  };
 
   const handleMealAdded = () => {
     setRefreshTrigger(prev => prev + 1); // Trigger refresh
@@ -26,6 +46,10 @@ export default function MealsScreen() {
     setModalVisible(false);
     setEditingMeal(null);
   };
+
+  useEffect(() => {
+    clearOldMeals();
+  }, []);
 
   return (
     <View style={styles.container}>

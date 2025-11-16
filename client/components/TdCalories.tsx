@@ -1,6 +1,6 @@
 import { supabase } from '@/constants/supabase';
 import { useEffect, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
 interface TdCaloriesProps {
   refreshTrigger: number;
@@ -40,25 +40,19 @@ export default function TdCalories({ refreshTrigger }: TdCaloriesProps) {
     <View style={styles.container}>
       <Text style={styles.title}>Today's Calories</Text>
       
-      <FlatList
-        data={dailyRecords}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.recordItem}>
-            <Text style={styles.date}>{formatDate(item.created_at)}</Text>
-            <View style={styles.nutritionRow}>
-              <Text style={styles.nutritionText}>{item.calories} cal</Text>
-              <Text style={styles.nutritionText}>{item.protein}g protein</Text>
-              <Text style={styles.nutritionText}>{item.carbs}g carbs</Text>
-              <Text style={styles.nutritionText}>{item.fat}g fat</Text>
-            </View>
+      {dailyRecords.length > 0 ? (
+        <View style={styles.recordItem}>
+          <Text style={styles.date}>{formatDate(dailyRecords[0].created_at)}</Text>
+          <View style={styles.nutritionRow}>
+            <Text style={styles.nutritionText}>{dailyRecords[0].calories} cal</Text>
+            <Text style={styles.nutritionText}>{dailyRecords[0].protein}g protein</Text>
+            <Text style={styles.nutritionText}>{dailyRecords[0].carbs}g carbs</Text>
+            <Text style={styles.nutritionText}>{dailyRecords[0].fat}g fat</Text>
           </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No daily records yet. Save some totals from the Meals tab!</Text>
-        }
-        showsVerticalScrollIndicator={false}
-      />
+        </View>
+      ) : (
+        <Text style={styles.emptyText}>No daily records yet. Save some totals from the Meals tab!</Text>
+      )}
     </View>
   );
 }

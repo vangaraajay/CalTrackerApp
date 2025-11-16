@@ -1,6 +1,6 @@
 import { supabase } from '@/constants/supabase';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { triggerDailyRefresh } from '@/hooks/dailyCountRefresh';
 
 interface TotalCalCountProps {
