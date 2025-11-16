@@ -1,6 +1,6 @@
 import { supabase } from '@/constants/supabase';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { triggerDailyRefresh } from '@/hooks/dailyCountRefresh';
 
 interface TotalCalCountProps {
@@ -38,10 +38,11 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
       ) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
       setTotals(dailyTotals);
+      saveDailyTotals(dailyTotals);
     }
   };
 
-  const saveDailyTotals = async () => {
+  const saveDailyTotals = async (dailyTotals: typeof totals) => {
     const today = new Date().toISOString().split('T')[0];
     
     // Check if there's already a record for today
@@ -52,7 +53,6 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
       .lt('created_at', `${today}T23:59:59`);
 
     if (fetchError) {
-      Alert.alert('Error', 'Failed to check existing records');
       return;
     }
 
@@ -64,28 +64,25 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
       ({ data, error } = await supabase
         .from('CalTracker')
         .update({
-          calories: totals.calories,
-          protein: totals.protein,
-          carbs: totals.carbs,
-          fat: totals.fat
+          calories: dailyTotals.calories,
+          protein: dailyTotals.protein,
+          carbs: dailyTotals.carbs,
+          fat: dailyTotals.fat
         })
         .eq('id', existingRecord.id));
     } else {
       ({ data, error } = await supabase
         .from('CalTracker')
         .insert({
-          calories: totals.calories,
-          protein: totals.protein,
-          carbs: totals.carbs,
-          fat: totals.fat
+          calories: dailyTotals.calories,
+          protein: dailyTotals.protein,
+          carbs: dailyTotals.carbs,
+          fat: dailyTotals.fat
         }));
     }
 
-    if (error) {
-      Alert.alert('Error', 'Failed to save daily totals');
-    } else {
-      Alert.alert('Success', existingRecord ? 'Daily totals updated!' : 'Daily totals saved!');
-      triggerDailyRefresh(); // Refresh daily tracker
+    if (!error) {
+      triggerDailyRefresh();
     }
   };
 
@@ -95,12 +92,7 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Today's Totals</Text>
-        <TouchableOpacity style={styles.saveButton} onPress={saveDailyTotals}>
-          <Text style={styles.saveButtonText}>Update Today's Totals</Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={styles.title}>Today's Totals</Text>
       <View style={styles.totalsRow}>
         <View style={styles.totalItem}>
           <Text style={styles.totalNumber}>{totals.calories}</Text>
@@ -130,27 +122,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 20,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-  },
-  saveButton: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
   },
   totalsRow: {
     flexDirection: 'row',

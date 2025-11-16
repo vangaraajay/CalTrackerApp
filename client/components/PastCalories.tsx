@@ -2,24 +2,24 @@ import { supabase } from '@/constants/supabase';
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 
-interface TdCaloriesProps {
+interface PastCaloriesProps {
   refreshTrigger: number;
 }
 
-export default function TdCalories({ refreshTrigger }: TdCaloriesProps) {
-  const [dailyRecords, setDailyRecords] = useState<any[]>([]);
+export default function PastCalories({ refreshTrigger }: PastCaloriesProps) {
+  const [pastRecords, setPastRecords] = useState<any[]>([]);
 
-  const fetchDailyHistory = async () => {
+  const fetchPastHistory = async () => {
     const { data, error } = await supabase
       .from('CalTracker')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(1);
+      .limit(30);
 
     if (error) {
-      Alert.alert('Error', 'Failed to fetch daily history');
+      Alert.alert('Error', 'Failed to fetch past history');
     } else {
-      setDailyRecords(data || []);
+      setPastRecords(data || []);
     }
   };
 
@@ -33,15 +33,15 @@ export default function TdCalories({ refreshTrigger }: TdCaloriesProps) {
   };
 
   useEffect(() => {
-    fetchDailyHistory();
+    fetchPastHistory();
   }, [refreshTrigger]);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Today's Calories</Text>
+      <Text style={styles.title}>Past 30 Days</Text>
       
       <FlatList
-        data={dailyRecords}
+        data={pastRecords}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <View style={styles.recordItem}>
@@ -55,9 +55,10 @@ export default function TdCalories({ refreshTrigger }: TdCaloriesProps) {
           </View>
         )}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No daily records yet. Save some totals from the Meals tab!</Text>
+          <Text style={styles.emptyText}>No past records yet.</Text>
         }
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled={true}
       />
     </View>
   );
@@ -65,13 +66,14 @@ export default function TdCalories({ refreshTrigger }: TdCaloriesProps) {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     backgroundColor: '#fff',
     padding: 20,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 15,
     textAlign: 'center',
     color: '#333',
   },
@@ -81,7 +83,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
+    borderLeftColor: '#4CAF50',
   },
   date: {
     fontSize: 16,
@@ -101,7 +103,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#999',
     fontSize: 16,
-    marginTop: 50,
+    marginTop: 20,
     fontStyle: 'italic',
   },
 });

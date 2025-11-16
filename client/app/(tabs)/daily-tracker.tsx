@@ -1,14 +1,16 @@
-import { View, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import TdCalories from '@/components/TdCalories';
+import PastCalories from '@/components/PastCalories';
 import { useDailyRefresh } from '@/hooks/dailyCountRefresh';
 
 export default function DailyTrackerScreen() {
   const trigger = useDailyRefresh();
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <TdCalories refreshTrigger={trigger} />
-    </View>
+      <PastCalories refreshTrigger={trigger} />
+    </ScrollView>
   );
 }
 
