@@ -4,9 +4,11 @@ import { Alert, StyleSheet, Text, View, FlatList, TouchableOpacity } from 'react
 
 interface MealsListProps {
   refreshTrigger: number;
+  onEdit: (meal: any) => void;
+  onMealDeleted: () => void;
 }
 
-export default function MealsList({ refreshTrigger }: MealsListProps) {
+export default function MealsList({ refreshTrigger, onEdit, onMealDeleted }: MealsListProps) {
   const [meals, setMeals] = useState<any[]>([]);
 
   const fetchMeals = async () => {
@@ -33,6 +35,7 @@ export default function MealsList({ refreshTrigger }: MealsListProps) {
     } else {
       Alert.alert('Success', 'Meal deleted!');
       fetchMeals(); // Refresh the list
+      onMealDeleted(); // Notify parent to refresh totals
     }
   };
 
@@ -55,12 +58,20 @@ export default function MealsList({ refreshTrigger }: MealsListProps) {
                 {item.calories} cal | {item.protein}g protein | {item.carbs}g carbs | {item.fat}g fat
               </Text>
             </View>
-            <TouchableOpacity 
-              style={styles.deleteButton}
-              onPress={() => deleteMeal(item.id)}
-            >
-              <Text style={styles.deleteText}>Delete</Text>
-            </TouchableOpacity>
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity 
+                style={styles.editButton}
+                onPress={() => onEdit(item)}
+              >
+                <Text style={styles.editText}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.deleteButton}
+                onPress={() => deleteMeal(item.id)}
+              >
+                <Text style={styles.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
         ListEmptyComponent={
@@ -106,6 +117,21 @@ const styles = StyleSheet.create({
   mealDetails: {
     fontSize: 14,
     color: '#666',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  editText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   deleteButton: {
     backgroundColor: '#ff4444',
