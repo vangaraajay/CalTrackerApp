@@ -8,7 +8,6 @@ export default function MealsScreen() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingMeal, setEditingMeal] = useState(null);
-  const [dailyTrackerRefresh, setDailyTrackerRefresh] = useState(0);
 
   const handleMealAdded = () => {
     setRefreshTrigger(prev => prev + 1); // Trigger refresh
@@ -31,10 +30,7 @@ export default function MealsScreen() {
   return (
     <View style={styles.container}>
       <MealsList refreshTrigger={refreshTrigger} onEdit={handleEdit} onMealDeleted={handleMealDeleted} />
-      <TotalCalCount 
-        refreshTrigger={refreshTrigger} 
-        onDailyTotalsSaved={() => setDailyTrackerRefresh(prev => prev + 1)}
-      />
+      <TotalCalCount refreshTrigger={refreshTrigger} />
       
       <TouchableOpacity 
         style={styles.addButton}

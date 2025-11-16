@@ -1,13 +1,13 @@
 import { supabase } from '@/constants/supabase';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { triggerDailyRefresh } from '@/hooks/dailyCountRefresh';
 
 interface TotalCalCountProps {
   refreshTrigger: number;
-  onDailyTotalsSaved?: () => void;
 }
 
-export default function TotalCalCount({ refreshTrigger, onDailyTotalsSaved }: TotalCalCountProps) {
+export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
   const [totals, setTotals] = useState({
     calories: 0,
     protein: 0,
@@ -85,7 +85,7 @@ export default function TotalCalCount({ refreshTrigger, onDailyTotalsSaved }: To
       Alert.alert('Error', 'Failed to save daily totals');
     } else {
       Alert.alert('Success', existingRecord ? 'Daily totals updated!' : 'Daily totals saved!');
-      onDailyTotalsSaved?.(); // Notify parent to refresh daily tracker
+      triggerDailyRefresh(); // Refresh daily tracker
     }
   };
 

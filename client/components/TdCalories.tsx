@@ -1,12 +1,12 @@
 import { supabase } from '@/constants/supabase';
-import { useState, useEffect } from 'react';
-import { Alert, StyleSheet, Text, View, FlatList } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 
-interface DailyHistoryProps {
+interface TdCaloriesProps {
   refreshTrigger: number;
 }
 
-export default function DailyHistory({ refreshTrigger }: DailyHistoryProps) {
+export default function TdCalories({ refreshTrigger }: TdCaloriesProps) {
   const [dailyRecords, setDailyRecords] = useState<any[]>([]);
 
   const fetchDailyHistory = async () => {
@@ -38,7 +38,7 @@ export default function DailyHistory({ refreshTrigger }: DailyHistoryProps) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Daily History</Text>
+      <Text style={styles.title}>Today's Calories</Text>
       
       <FlatList
         data={dailyRecords}
