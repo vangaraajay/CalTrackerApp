@@ -19,6 +19,12 @@ export default function TabLayout() {
           title: 'Meals',
         }}
       />
+      <Tabs.Screen
+        name="daily-tracker"
+        options={{
+          title: 'Daily Tracker',
+        }}
+      />
     </Tabs>
   );
 }
