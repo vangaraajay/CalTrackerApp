@@ -1,0 +1,12 @@
+# Environment variables
+.env
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# AWS deployment files
+*.zip
+
+# Logs
+*.log
