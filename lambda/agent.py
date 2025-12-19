@@ -3,7 +3,7 @@ import json
 
 bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
 
-def chat_with_claude(message):
+def queryAgent(message):
     """Query Claude 3 Haiku via Bedrock"""
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
@@ -27,4 +27,4 @@ def chat_with_claude(message):
     return response_body['content'][0]['text']
 
 if __name__ == "__main__":
-    print(chat_with_claude("Answer 1 + 1"))
+    print(queryAgent("Answer 1 + 1"))
