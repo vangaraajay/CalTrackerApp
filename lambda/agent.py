@@ -1,8 +1,13 @@
+import os
 import boto3
 import json
 import uuid
+from dotenv import load_dotenv
 
-bedrock_agent = boto3.client('bedrock-agent-runtime', region_name='us-east-1')
+# Load environment variables
+load_dotenv()
+
+bedrock_agent = boto3.client('bedrock-agent-runtime', region_name='us-east-2')
 
 def queryAgent(message, agent_id, agent_alias_id='TSTALIASID'):
     """Query Bedrock Agent with tool support"""
@@ -26,6 +31,5 @@ def queryAgent(message, agent_id, agent_alias_id='TSTALIASID'):
     return result
 
 if __name__ == "__main__":
-    # You need to create a Bedrock Agent first and get the agent_id
-    agent_id = "YOUR_AGENT_ID"  # Replace with actual agent ID
+    agent_id = os.environ.get('BEDROCK_AGENT_ID')
     print(queryAgent("Answer 1 + 1", agent_id))
