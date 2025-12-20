@@ -1,30 +1,31 @@
 import boto3
 import json
+import uuid
 
-bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+bedrock_agent = boto3.client('bedrock-agent-runtime', region_name='us-east-1')
 
-def queryAgent(message):
-    """Query Claude 3 Haiku via Bedrock"""
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 150,
-        "messages": [
-            {
-                "role": "user",
-                "content": message
-            }
-        ]
-    })
+def queryAgent(message, agent_id, agent_alias_id='TSTALIASID'):
+    """Query Bedrock Agent with tool support"""
+    session_id = str(uuid.uuid4())
     
-    response = bedrock.invoke_model(
-        body=body,
-        modelId='anthropic.claude-3-haiku-20240307-v1:0',
-        accept='application/json',
-        contentType='application/json'
+    response = bedrock_agent.invoke_agent(
+        agentId=agent_id,
+        agentAliasId=agent_alias_id,
+        sessionId=session_id,
+        inputText=message
     )
     
-    response_body = json.loads(response.get('body').read())
-    return response_body['content'][0]['text']
+    # Extract response from stream
+    result = ""
+    for event in response['completion']:
+        if 'chunk' in event:
+            chunk = event['chunk']
+            if 'bytes' in chunk:
+                result += chunk['bytes'].decode('utf-8')
+    
+    return result
 
 if __name__ == "__main__":
-    print(queryAgent("Answer 1 + 1"))
+    # You need to create a Bedrock Agent first and get the agent_id
+    agent_id = "YOUR_AGENT_ID"  # Replace with actual agent ID
+    print(queryAgent("Answer 1 + 1", agent_id))
