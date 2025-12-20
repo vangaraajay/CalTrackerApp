@@ -37,11 +37,8 @@ def lambda_handler(event, context):
 
 def add_meal(params):
     """Add a meal to the database"""
-    user_id = params.get('user_id', 'default-user')
-    
     response = supabase.table('Meals').insert({
-        'user_id': user_id,
-        'name': params.get('name'),
+        'meal_name': params.get('name'),
         'calories': params.get('calories'),
         'protein': params.get('protein'),
         'carbs': params.get('carbs'),
@@ -64,7 +61,7 @@ def modify_meal(params):
     
     update_data = {}
     if params.get('name'):
-        update_data['name'] = params.get('name')
+        update_data['meal_name'] = params.get('name')
     if params.get('calories'):
         update_data['calories'] = params.get('calories')
     if params.get('protein'):
@@ -79,18 +76,17 @@ def modify_meal(params):
     return create_response(f"Modified meal with ID {meal_id}")
 
 def get_meals(params):
-    """Get today's meals for a user"""
-    user_id = params.get('user_id', 'default-user')
+    """Get today's meals"""
     today = datetime.now().strftime('%Y-%m-%d')
     
-    response = supabase.table('Meals').select('id, name, calories, protein, carbs, fat, created_at').eq('user_id', user_id).gte('created_at', f'{today}T00:00:00').lt('created_at', f'{today}T23:59:59').execute()
+    response = supabase.table('Meals').select('id, meal_name, calories, protein, carbs, fat, created_at').gte('created_at', f'{today}T00:00:00').lt('created_at', f'{today}T23:59:59').execute()
     
     if not response.data:
         return create_response("No meals found for today")
     
     meals_text = "Today's meals:\n"
     for meal in response.data:
-        meals_text += f"ID: {meal['id']} - {meal['name']}: {meal['calories']} cal, {meal['protein']}g protein, {meal['carbs']}g carbs, {meal['fat']}g fat\n"
+        meals_text += f"ID: {meal['id']} - {meal['meal_name']}: {meal['calories']} cal, {meal['protein']}g protein, {meal['carbs']}g carbs, {meal['fat']}g fat\n"
     
     return create_response(meals_text)
 
@@ -109,3 +105,72 @@ def create_response(message):
             }
         }
     }
+
+if __name__ == "__main__":
+    # Test all 4 tools locally
+    print("=== Testing add_meal ===")
+    test_event = {
+        'function': 'add_meal',
+        'parameters': {
+            'name': 'Test Chicken',
+            'calories': 300,
+            'protein': 30,
+            'carbs': 5,
+            'fat': 10
+        }
+    }
+    result = lambda_handler(test_event, None)
+    print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
+    
+    print("\n=== Testing get_meals ===")
+    test_event = {
+        'function': 'get_meals',
+        'parameters': {}
+    }
+    result = lambda_handler(test_event, None)
+    meals_response = result['response']['functionResponse']['responseBody']['TEXT']['body']
+    print(meals_response)
+    
+    # Extract meal ID for modify/delete tests (assuming format "ID: X - ...")
+    if "ID:" in meals_response:
+        meal_id = meals_response.split("ID: ")[1].split(" ")[0]
+        
+        print(f"\n=== Testing modify_meal (ID: {meal_id}) ===")
+        test_event = {
+            'function': 'modify_meal',
+            'parameters': {
+                'meal_id': int(meal_id),
+                'name': 'Modified Chicken',
+                'calories': 350
+            }
+        }
+        result = lambda_handler(test_event, None)
+        print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
+        
+        print("\n=== Testing get_meals after modify ===")
+        test_event = {
+            'function': 'get_meals',
+            'parameters': {}
+        }
+        result = lambda_handler(test_event, None)
+        print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
+        
+        print(f"\n=== Testing delete_meal (ID: {meal_id}) ===")
+        test_event = {
+            'function': 'delete_meal',
+            'parameters': {
+                'meal_id': int(meal_id)
+            }
+        }
+        result = lambda_handler(test_event, None)
+        print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
+        
+        print("\n=== Testing get_meals after delete ===")
+        test_event = {
+            'function': 'get_meals',
+            'parameters': {}
+        }
+        result = lambda_handler(test_event, None)
+        print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
+    else:
+        print("\nNo meals found to test modify/delete")
