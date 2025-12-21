@@ -2,11 +2,13 @@ import json
 import os
 from datetime import datetime, timezone
 from supabase import create_client
+'''
+Only need these when locally running
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-
+'''
 # Initialize Supabase client
 supabase = create_client(
     os.environ.get('DB_API_URL'),
@@ -101,7 +103,7 @@ def create_response(message):
     """Create standardized response for Bedrock Agent"""
     return {
         'response': {
-            'actionGroup': 'Action-Group',
+            'actionGroup': 'meal_tools',
             'function': 'tool_response',
             'functionResponse': {
                 'responseBody': {

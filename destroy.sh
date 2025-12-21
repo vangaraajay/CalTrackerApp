@@ -5,6 +5,8 @@ set -o pipefail
 cd ./terraform
 terraform init
 terraform destroy -auto-approve
+rm -rf .terraform
+rm -f terraform.tfstate terraform.tfstate.backup .terraform.lock.hcl
 cd -
 
 # Delete the Lambda zip
