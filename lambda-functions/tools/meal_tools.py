@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from supabase import create_client
 from dotenv import load_dotenv
 
@@ -17,7 +17,7 @@ def lambda_handler(event, context):
     """Main Lambda handler for Bedrock Agent tools"""
     print(f'Event: {json.dumps(event, indent=2)}')
     
-    function_name = event.get('function')
+    function_name = event.get('name')
     parameters = event.get('parameters', {})
     
     try:
@@ -77,24 +77,31 @@ def modify_meal(params):
 
 def get_meals(params):
     """Get today's meals"""
-    today = datetime.now().strftime('%Y-%m-%d')
-    
-    response = supabase.table('Meals').select('id, meal_name, calories, protein, carbs, fat, created_at').gte('created_at', f'{today}T00:00:00').lt('created_at', f'{today}T23:59:59').execute()
-    
+    today_utc = datetime.now(timezone.utc)
+    start_of_day = today_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = today_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    response = supabase.table('Meals')\
+        .select('id, meal_name, calories, protein, carbs, fat, created_at')\
+        .gte('created_at', start_of_day.isoformat())\
+        .lte('created_at', end_of_day.isoformat())\
+        .execute()
+
     if not response.data:
         return create_response("No meals found for today")
-    
+
     meals_text = "Today's meals:\n"
     for meal in response.data:
         meals_text += f"ID: {meal['id']} - {meal['meal_name']}: {meal['calories']} cal, {meal['protein']}g protein, {meal['carbs']}g carbs, {meal['fat']}g fat\n"
     
     return create_response(meals_text)
 
+
 def create_response(message):
     """Create standardized response for Bedrock Agent"""
     return {
         'response': {
-            'actionGroup': 'meal-functions',
+            'actionGroup': 'Action-Group',
             'function': 'tool_response',
             'functionResponse': {
                 'responseBody': {
@@ -130,7 +137,7 @@ if __name__ == "__main__":
     result = lambda_handler(test_event, None)
     meals_response = result['response']['functionResponse']['responseBody']['TEXT']['body']
     print(meals_response)
-    
+
     # Extract meal ID for modify/delete tests (assuming format "ID: X - ...")
     if "ID:" in meals_response:
         meal_id = meals_response.split("ID: ")[1].split(" ")[0]
@@ -154,7 +161,7 @@ if __name__ == "__main__":
         }
         result = lambda_handler(test_event, None)
         print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
-        
+
         print(f"\n=== Testing delete_meal (ID: {meal_id}) ===")
         test_event = {
             'function': 'delete_meal',
