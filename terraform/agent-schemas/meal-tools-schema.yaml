@@ -7,83 +7,182 @@ paths:
   /addMeal:
     post:
       summary: Add a new meal
-      description: Add a meal using a simple text string.
+      description: Add a meal by providing structured JSON parameters.
       operationId: add_meal
       requestBody:
         required: true
         content:
-          text/plain:
+          application/json:
             schema:
-              type: string
-              example: "Chicken Salad, 350 calories, 30g protein, 20g carbs, 10g fat"
+              type: object
+              properties:
+                apiPath:
+                  type: string
+                  example: "/addMeal"
+                actionGroup:
+                  type: string
+                  example: "meals"
+                httpMethod:
+                  type: string
+                  example: "POST"
+                parameters:
+                  type: object
+                  required: [name, calories]
+                  properties:
+                    name:
+                      type: string
+                      example: "Chicken Salad"
+                    calories:
+                      type: number
+                      example: 350
+                    protein:
+                      type: number
+                      example: 30
+                    carbs:
+                      type: number
+                      example: 20
+                    fat:
+                      type: number
+                      example: 10
       responses:
         "200":
           description: Meal added successfully
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
-                example: "Meal added successfully"
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Added Chicken Salad with 350 calories"
   /deleteMeal:
     post:
       summary: Delete a meal
-      description: Delete a meal by providing its ID as text.
+      description: Delete a meal by providing its ID in JSON parameters.
       operationId: delete_meal
       requestBody:
         required: true
         content:
-          text/plain:
+          application/json:
             schema:
-              type: string
-              example: "123"
+              type: object
+              properties:
+                apiPath:
+                  type: string
+                  example: "/deleteMeal"
+                actionGroup:
+                  type: string
+                  example: "meals"
+                httpMethod:
+                  type: string
+                  example: "POST"
+                parameters:
+                  type: object
+                  required: [meal_id]
+                  properties:
+                    meal_id:
+                      type: integer
+                      example: 123
       responses:
         "200":
           description: Meal deleted successfully
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
-                example: "Meal deleted successfully"
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Deleted meal with ID 123"
   /modifyMeal:
     post:
       summary: Modify an existing meal
-      description: Modify a meal by providing all details in text format.
+      description: Modify a meal by providing JSON parameters. `meal_id` is required; other fields are optional.
       operationId: modify_meal
       requestBody:
         required: true
         content:
-          text/plain:
+          application/json:
             schema:
-              type: string
-              example: "123, Chicken Salad Deluxe, 400 calories, 35g protein, 25g carbs, 12g fat"
+              type: object
+              properties:
+                apiPath:
+                  type: string
+                  example: "/modifyMeal"
+                actionGroup:
+                  type: string
+                  example: "meals"
+                httpMethod:
+                  type: string
+                  example: "POST"
+                parameters:
+                  type: object
+                  required: [meal_id]
+                  properties:
+                    meal_id:
+                      type: integer
+                      example: 123
+                    name:
+                      type: string
+                      example: "Chicken Salad Deluxe"
+                    calories:
+                      type: number
+                      example: 400
+                    protein:
+                      type: number
+                      example: 35
+                    carbs:
+                      type: number
+                      example: 25
+                    fat:
+                      type: number
+                      example: 12
       responses:
         "200":
           description: Meal modified successfully
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
-                example: "Meal modified successfully"
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Modified meal with ID 123"
   /getMeals:
     post:
       summary: Retrieve today's meals
-      description: Simply call this endpoint to get today's meals as a text list.
+      description: Call this endpoint to get today's meals. Parameters are optional; you can pass an empty parameters object.
       operationId: get_meal
       requestBody:
         required: false
         content:
-          text/plain:
+          application/json:
             schema:
-              type: string
-              example: ""
+              type: object
+              properties:
+                apiPath:
+                  type: string
+                  example: "/getMeals"
+                actionGroup:
+                  type: string
+                  example: "meals"
+                httpMethod:
+                  type: string
+                  example: "POST"
+                parameters:
+                  type: object
+                  properties: {}
       responses:
         "200":
           description: List of today's meals
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
-                example: |
-                  123: Chicken Salad, 350 cal, 30g protein
-                  124: Beef Stir Fry, 500 cal, 40g protein
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: |
+                      ID: 123 - Chicken Salad: 350 cal, 30g protein, 20g carbs, 10g fat
+                      ID: 124 - Beef Stir Fry: 500 cal, 40g protein, 35g carbs, 20g fat
 
