@@ -2,13 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 from supabase import create_client
-'''
-Only need these when locally running
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-'''
 # Initialize Supabase client
 supabase = create_client(
     os.environ.get('DB_API_URL'),
@@ -18,101 +12,100 @@ supabase = create_client(
 def lambda_handler(event, context):
     """Main Lambda handler for Bedrock Agent tools"""
     print(f'Event: {json.dumps(event, indent=2)}')
-    
-    function_name = event.get('name')
-    parameters = event.get('parameters', {})
-    
+
+    api_path = event.get("apiPath")
+    action_group = event.get("actionGroup")
+    http_method = event.get("httpMethod", "POST")
+    parameters = event.get("parameters", {})
+
     try:
-        if function_name == 'add_meal':
-            return add_meal(parameters)
-        elif function_name == 'delete_meal':
-            return delete_meal(parameters)
-        elif function_name == 'modify_meal':
-            return modify_meal(parameters)
-        elif function_name == 'get_meals':
-            return get_meals(parameters)
+        # Determine which tool to call based on apiPath
+        if api_path == "/addMeal":
+            message = add_meal(parameters)
+        elif api_path == "/deleteMeal":
+            message = delete_meal(parameters)
+        elif api_path == "/modifyMeal":
+            message = modify_meal(parameters)
+        elif api_path == "/getMeals":
+            message = get_meals(parameters)
         else:
-            return create_response("Function not found")
-    except Exception as error:
-        print(f'Error: {error}')
-        return create_response(f"Error: {str(error)}")
+            message = "Function not found"
+
+        resp = create_response(message, api_path, action_group, http_method, status_code=200)
+        print("FINAL RESPONSE:", json.dumps(resp, indent=2))
+        return resp
+
+    except Exception as e:
+        # Always return the proper structure, even on error
+        return create_response(f"Error: {str(e)}", api_path, action_group, http_method, status_code=500)
+
 
 def add_meal(params):
-    """Add a meal to the database"""
-    response = supabase.table('Meals').insert({
-        'meal_name': params.get('name'),
-        'calories': params.get('calories'),
-        'protein': params.get('protein'),
-        'carbs': params.get('carbs'),
-        'fat': params.get('fat')
+    response = supabase.table("Meals").insert({
+        "meal_name": params.get("name"),
+        "calories": params.get("calories"),
+        "protein": params.get("protein"),
+        "carbs": params.get("carbs"),
+        "fat": params.get("fat")
     }).execute()
-    
-    return create_response(f"Added {params.get('name')} with {params.get('calories')} calories")
+    return f"Added {params.get('name')} with {params.get('calories')} calories"
+
 
 def delete_meal(params):
-    """Delete a meal by ID"""
-    meal_id = params.get('meal_id')
-    
-    response = supabase.table('Meals').delete().eq('id', meal_id).execute()
-    
-    return create_response(f"Deleted meal with ID {meal_id}")
+    meal_id = params.get("meal_id")
+    supabase.table("Meals").delete().eq("id", meal_id).execute()
+    return f"Deleted meal with ID {meal_id}"
+
 
 def modify_meal(params):
-    """Modify an existing meal"""
-    meal_id = params.get('meal_id')
-    
+    meal_id = params.get("meal_id")
     update_data = {}
-    if params.get('name'):
-        update_data['meal_name'] = params.get('name')
-    if params.get('calories'):
-        update_data['calories'] = params.get('calories')
-    if params.get('protein'):
-        update_data['protein'] = params.get('protein')
-    if params.get('carbs'):
-        update_data['carbs'] = params.get('carbs')
-    if params.get('fat'):
-        update_data['fat'] = params.get('fat')
-    
-    response = supabase.table('Meals').update(update_data).eq('id', meal_id).execute()
-    
-    return create_response(f"Modified meal with ID {meal_id}")
+    if params.get("name"): update_data["meal_name"] = params.get("name")
+    if params.get("calories"): update_data["calories"] = params.get("calories")
+    if params.get("protein"): update_data["protein"] = params.get("protein")
+    if params.get("carbs"): update_data["carbs"] = params.get("carbs")
+    if params.get("fat"): update_data["fat"] = params.get("fat")
+    supabase.table("Meals").update(update_data).eq("id", meal_id).execute()
+    return f"Modified meal with ID {meal_id}"
+
 
 def get_meals(params):
-    """Get today's meals"""
     today_utc = datetime.now(timezone.utc)
     start_of_day = today_utc.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = today_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
 
-    response = supabase.table('Meals')\
-        .select('id, meal_name, calories, protein, carbs, fat, created_at')\
-        .gte('created_at', start_of_day.isoformat())\
-        .lte('created_at', end_of_day.isoformat())\
+    response = supabase.table("Meals")\
+        .select("id, meal_name, calories, protein, carbs, fat, created_at")\
+        .gte("created_at", start_of_day.isoformat())\
+        .lte("created_at", end_of_day.isoformat())\
         .execute()
 
     if not response.data:
-        return create_response("No meals found for today")
+        return "No meals found for today"
 
-    meals_text = "Today's meals:\n"
+    text = "Today's meals:\n"
     for meal in response.data:
-        meals_text += f"ID: {meal['id']} - {meal['meal_name']}: {meal['calories']} cal, {meal['protein']}g protein, {meal['carbs']}g carbs, {meal['fat']}g fat\n"
-    
-    return create_response(meals_text)
+        text += f"ID: {meal['id']} - {meal['meal_name']}: {meal['calories']} cal, {meal['protein']}g protein, {meal['carbs']}g carbs, {meal['fat']}g fat\n"
+    return text
 
 
-def create_response(message):
-    """Create standardized response for Bedrock Agent"""
+def create_response(message, api_path, action_group, http_method, status_code=200):
+    """Return the exact format Bedrock expects"""
     return {
-        'response': {
-            'actionGroup': 'meal_tools',
-            'function': 'tool_response',
-            'functionResponse': {
-                'responseBody': {
-                    'TEXT': {
-                        'body': message
-                    }
+        "messageVersion": "1.0",
+        "response": {
+            "actionGroup": action_group,
+            "apiPath": api_path,
+            "httpMethod": http_method,
+            "httpStatusCode": status_code,
+            "responseBody": {
+                "application/json": {
+                    "body": message  # plain text or JSON-stringified text
                 }
             }
-        }
+        },
+        "sessionAttributes": {},
+        "promptSessionAttributes": {}
     }
 '''
 if __name__ == "__main__":

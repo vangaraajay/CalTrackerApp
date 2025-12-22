@@ -2,153 +2,88 @@ openapi: 3.0.0
 info:
   title: Meals Management API
   version: 1.0.0
-  description: APIs for managing meals, including adding, deleting, modifying, and retrieving meals for the day.
+  description: APIs for managing meals, now simplified to plain text payloads.
 paths:
   /addMeal:
     post:
       summary: Add a new meal
-      description: Add a meal to the daily meal tracker with calories, protein, carbs, and fat.
+      description: Add a meal using a simple text string.
       operationId: add_meal
       requestBody:
         required: true
         content:
-          application/json:
+          text/plain:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                  description: Name of the meal
-                calories:
-                  type: number
-                  description: Total calories in the meal
-                protein:
-                  type: number
-                  description: Protein content in grams
-                carbs:
-                  type: number
-                  description: Carbohydrate content in grams
-                fat:
-                  type: number
-                  description: Fat content in grams
-              required:
-                - name
-                - calories
+              type: string
+              example: "Chicken Salad, 350 calories, 30g protein, 20g carbs, 10g fat"
       responses:
         "200":
           description: Meal added successfully
           content:
-            application/json:
+            text/plain:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+                type: string
+                example: "Meal added successfully"
   /deleteMeal:
     post:
       summary: Delete a meal
-      description: Delete a meal from the daily tracker by its unique ID.
+      description: Delete a meal by providing its ID as text.
       operationId: delete_meal
       requestBody:
         required: true
         content:
-          application/json:
+          text/plain:
             schema:
-              type: object
-              properties:
-                meal_id:
-                  type: integer
-                  description: Unique ID of the meal to delete
-              required:
-                - meal_id
+              type: string
+              example: "123"
       responses:
         "200":
           description: Meal deleted successfully
           content:
-            application/json:
+            text/plain:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+                type: string
+                example: "Meal deleted successfully"
   /modifyMeal:
     post:
       summary: Modify an existing meal
-      description: Update an existing meal's details using its ID.
+      description: Modify a meal by providing all details in text format.
       operationId: modify_meal
       requestBody:
         required: true
         content:
-          application/json:
+          text/plain:
             schema:
-              type: object
-              properties:
-                meal_id:
-                  type: integer
-                  description: Unique ID of the meal to modify
-                name:
-                  type: string
-                  description: Updated meal name
-                calories:
-                  type: number
-                  description: Updated calories
-                protein:
-                  type: number
-                  description: Updated protein in grams
-                carbs:
-                  type: number
-                  description: Updated carbs in grams
-                fat:
-                  type: number
-                  description: Updated fat in grams
-              required:
-                - meal_id
+              type: string
+              example: "123, Chicken Salad Deluxe, 400 calories, 35g protein, 25g carbs, 12g fat"
       responses:
         "200":
           description: Meal modified successfully
           content:
-            application/json:
+            text/plain:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+                type: string
+                example: "Meal modified successfully"
   /getMeals:
     post:
       summary: Retrieve today's meals
-      description: Get all meals recorded for today.
-      operationId: get_meals
+      description: Simply call this endpoint to get today's meals as a text list.
+      operationId: get_meal
       requestBody:
         required: false
         content:
-          application/json:
+          text/plain:
             schema:
-              type: object
+              type: string
+              example: ""
       responses:
         "200":
           description: List of today's meals
           content:
-            application/json:
+            text/plain:
               schema:
-                type: object
-                properties:
-                  meals:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        meal_name:
-                          type: string
-                        calories:
-                          type: number
-                        protein:
-                          type: number
-                        carbs:
-                          type: number
-                        fat:
-                          type: number
-                        created_at:
-                          type: string
-                          format: date-time
+                type: string
+                example: |
+                  123: Chicken Salad, 350 cal, 30g protein
+                  124: Beef Stir Fry, 500 cal, 40g protein
+
