@@ -185,4 +185,76 @@ paths:
                     example: |
                       ID: 123 - Chicken Salad: 350 cal, 30g protein, 20g carbs, 10g fat
                       ID: 124 - Beef Stir Fry: 500 cal, 40g protein, 35g carbs, 20g fat
+  /findMealByName:
+    post:
+      summary: Find meals by fuzzy name matching
+      description: Return best matching meals for a provided name. Can optionally perform `modify` or `delete` when confidence is high.
+      operationId: find_meal_by_name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                apiPath:
+                  type: string
+                  example: "/findMealByName"
+                actionGroup:
+                  type: string
+                  example: "meal_tools"
+                httpMethod:
+                  type: string
+                  example: "POST"
+                parameters:
+                  type: object
+                  required: [name]
+                  properties:
+                    name:
+                      type: string
+                      example: "burrito"
+                    action:
+                      type: string
+                      enum: ["modify", "delete"]
+                      example: "delete"
+                    auto_confirm_threshold:
+                      type: number
+                      example: 0.9
+                    calories:
+                      type: integer
+                      example: 500
+                    update_fields:
+                      type: object
+                      example: {"calories": 450}
+      responses:
+        "200":
+          description: Matching candidates and optional action result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  candidates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        calories:
+                          type: number
+                        created_at:
+                          type: string
+                        score:
+                          type: number
+                  best_match:
+                    type: object
+                    nullable: true
+                  auto_act_performed:
+                    type: boolean
+                  message:
+                    type: string
+                    example: "Candidates returned"
 

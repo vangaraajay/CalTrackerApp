@@ -3,6 +3,8 @@ import os
 from datetime import datetime, timezone
 from supabase import create_client
 import traceback
+import re
+import difflib
 
 # Initialize Supabase client
 supabase = create_client(
@@ -36,6 +38,9 @@ def lambda_handler(event, context):
 
     try:
         # Determine which tool to call based on apiPath
+        if api_path == "/findMealByName":
+            message = find_meal_by_name(parameters)
+        
         if api_path == "/addMeal":
             message = add_meal(parameters)
         elif api_path == "/deleteMeal":
@@ -267,6 +272,98 @@ def get_meals(params):
     for meal in data:
         text += f"ID: {meal['id']} - {meal['meal_name']}: {meal['calories']} cal, {meal['protein']}g protein, {meal['carbs']}g carbs, {meal['fat']}g fat\n"
     return text
+
+
+def _normalize_text(s: str) -> str:
+    s = (s or "").lower()
+    s = re.sub(r"[\W_]+", " ", s)  # remove punctuation
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _token_jaccard(a: str, b: str) -> float:
+    ta = set(a.split())
+    tb = set(b.split())
+    if not ta and not tb:
+        return 0.0
+    inter = ta.intersection(tb)
+    union = ta.union(tb)
+    return len(inter) / len(union) if union else 0.0
+
+
+def find_meal_by_name(params):
+    """Find today's meals that best match `params['name']`.
+
+    Returns structured candidates with scores. If `action` and `auto_confirm_threshold`
+    are provided and best match meets threshold, performs the action.
+    """
+    name = params.get("name")
+    if not name:
+        return {"candidates": [], "best_match": None, "message": "Missing 'name' parameter"}
+
+    action = params.get("action")  # 'modify'|'delete'|None
+    threshold = float(params.get("auto_confirm_threshold", 0.85))
+    update_fields = params.get("update_fields") or {}
+
+    # fetch today's meals (structured)
+    today_utc = datetime.now(timezone.utc)
+    start_of_day = today_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = today_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    try:
+        response = supabase.table("Meals")\
+            .select("id, meal_name, calories, protein, carbs, fat, created_at")\
+            .gte("created_at", start_of_day.isoformat())\
+            .lte("created_at", end_of_day.isoformat())\
+            .execute()
+        rows = getattr(response, "data", []) or []
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(tb)
+        return {"candidates": [], "best_match": None, "message": f"DB error: {str(e)}"}
+
+    target = _normalize_text(name)
+    candidates = []
+    for r in rows:
+        mname = r.get("meal_name") or ""
+        norm = _normalize_text(mname)
+        seq_ratio = difflib.SequenceMatcher(None, target, norm).ratio()
+        jacc = _token_jaccard(target, norm)
+        score = max(seq_ratio, jacc)
+        # bonus if calories specified and matches
+        try:
+            provided_cal = params.get("calories")
+            if provided_cal is not None and r.get("calories") is not None:
+                if int(r.get("calories")) == int(provided_cal):
+                    score = min(1.0, score + 0.1)
+        except Exception:
+            pass
+
+        candidates.append({
+            "id": r.get("id"),
+            "name": mname,
+            "calories": r.get("calories"),
+            "created_at": r.get("created_at"),
+            "score": round(float(score), 3)
+        })
+
+    candidates.sort(key=lambda x: x["score"], reverse=True)
+    best = candidates[0] if candidates else None
+
+    # Auto-act if requested
+    if action and best and best["score"] >= threshold:
+        if action == "delete":
+            # call existing helper
+            msg = delete_meal({"meal_id": best["id"]})
+            return {"candidates": candidates[:5], "best_match": best, "auto_act_performed": True, "message": msg}
+        elif action == "modify":
+            params_for_modify = {"meal_id": best["id"]}
+            params_for_modify.update(update_fields or {})
+            msg = modify_meal(params_for_modify)
+            return {"candidates": candidates[:5], "best_match": best, "auto_act_performed": True, "message": msg}
+
+    # otherwise return candidates for agent to decide
+    return {"candidates": candidates[:5], "best_match": best, "auto_act_performed": False, "message": "Candidates returned"}
 
 
 def create_response(message, api_path, action_group, http_method, status_code=200):
