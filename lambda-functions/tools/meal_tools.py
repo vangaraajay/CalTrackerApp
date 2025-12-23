@@ -5,6 +5,13 @@ from supabase import create_client
 import traceback
 import re
 import difflib
+from types import SimpleNamespace
+'''
+Only needed if running locally
+from dotenv import load_dotenv
+
+load_dotenv()
+'''
 
 # Initialize Supabase client
 supabase = create_client(
@@ -40,8 +47,7 @@ def lambda_handler(event, context):
         # Determine which tool to call based on apiPath
         if api_path == "/findMealByName":
             message = find_meal_by_name(parameters)
-        
-        if api_path == "/addMeal":
+        elif api_path == "/addMeal":
             message = add_meal(parameters)
         elif api_path == "/deleteMeal":
             message = delete_meal(parameters)
@@ -100,6 +106,9 @@ def _try_convert_value(v: str):
     # remove surrounding braces
     if s.startswith("{") and s.endswith("}"):
         s = s[1:-1].strip()
+    # try stripping common unit suffixes like 'g', 'cal', 'kcal'
+    s = re.sub(r"(?i)\b([0-9,.]+)\s*(k?cal|cal|g)\b", r"\1", s)
+    s = s.replace(',', '')
     # numeric int
     if s.isdigit() or (s.startswith("-") and s[1:].isdigit()):
         try:
@@ -120,8 +129,28 @@ def _parse_key_values(s: str):
     out = {}
     if not s:
         return out
-    # remove surrounding braces if present
     s2 = s.strip()
+    # try JSON first
+    try:
+        if (s2.startswith('{') and s2.endswith('}')) or (s2.startswith('[') and s2.endswith(']')):
+            parsed = json.loads(s2)
+            if isinstance(parsed, dict):
+                # convert values
+                return {k: _try_convert_value(v) for k, v in parsed.items()}
+    except Exception:
+        pass
+
+    # simple XML-like tags: <name>Chipotle Burrito</name><calories>50</calories>
+    if '<' in s2 and '</' in s2:
+        # find tags of form <key>value</key>
+        for m in re.finditer(r"<([a-zA-Z0-9_\-]+)>(.*?)</\1>", s2, flags=re.DOTALL):
+            key = m.group(1).strip()
+            val = m.group(2).strip()
+            out[key] = _try_convert_value(val)
+        if out:
+            return out
+
+    # fallback: remove surrounding braces if present
     if s2.startswith("{") and s2.endswith("}"):
         s2 = s2[1:-1]
     # split by commas
@@ -280,7 +309,6 @@ def _normalize_text(s: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
-
 def _token_jaccard(a: str, b: str) -> float:
     ta = set(a.split())
     tb = set(b.split())
@@ -290,7 +318,6 @@ def _token_jaccard(a: str, b: str) -> float:
     union = ta.union(tb)
     return len(inter) / len(union) if union else 0.0
 
-
 def find_meal_by_name(params):
     """Find today's meals that best match `params['name']`.
 
@@ -299,7 +326,7 @@ def find_meal_by_name(params):
     """
     name = params.get("name")
     if not name:
-        return {"candidates": [], "best_match": None, "message": "Missing 'name' parameter"}
+        return {"candidates": [], "best_match": None, "auto_act_performed": False, "message": "Missing 'name' parameter"}
 
     action = params.get("action")  # 'modify'|'delete'|None
     threshold = float(params.get("auto_confirm_threshold", 0.85))
@@ -318,18 +345,25 @@ def find_meal_by_name(params):
             .execute()
         rows = getattr(response, "data", []) or []
     except Exception as e:
+        import traceback
         tb = traceback.format_exc()
         print(tb)
-        return {"candidates": [], "best_match": None, "message": f"DB error: {str(e)}"}
+        return {"candidates": [], "best_match": None, "auto_act_performed": False, "message": f"DB error: {str(e)}"}
+
+    if not rows:
+        return {"candidates": [], "best_match": None, "auto_act_performed": False, "message": "No meals found today"}
 
     target = _normalize_text(name)
     candidates = []
+
     for r in rows:
         mname = r.get("meal_name") or ""
         norm = _normalize_text(mname)
+
         seq_ratio = difflib.SequenceMatcher(None, target, norm).ratio()
         jacc = _token_jaccard(target, norm)
         score = max(seq_ratio, jacc)
+
         # bonus if calories specified and matches
         try:
             provided_cal = params.get("calories")
@@ -348,22 +382,22 @@ def find_meal_by_name(params):
         })
 
     candidates.sort(key=lambda x: x["score"], reverse=True)
-    best = candidates[0] if candidates else None
+    best_candidate = candidates[0] if candidates else None
+    best_score = float(best_candidate.get("score", 0.0)) if best_candidate else 0.0
 
     # Auto-act if requested
-    if action and best and best["score"] >= threshold:
+    if action and best_candidate and best_score >= threshold:
         if action == "delete":
-            # call existing helper
-            msg = delete_meal({"meal_id": best["id"]})
-            return {"candidates": candidates[:5], "best_match": best, "auto_act_performed": True, "message": msg}
+            msg = delete_meal({"meal_id": best_candidate["id"]})
+            return {"candidates": candidates[:5], "best_match": best_candidate, "auto_act_performed": True, "message": msg}
         elif action == "modify":
-            params_for_modify = {"meal_id": best["id"]}
+            params_for_modify = {"meal_id": best_candidate["id"]}
             params_for_modify.update(update_fields or {})
             msg = modify_meal(params_for_modify)
-            return {"candidates": candidates[:5], "best_match": best, "auto_act_performed": True, "message": msg}
+            return {"candidates": candidates[:5], "best_match": best_candidate, "auto_act_performed": True, "message": msg}
 
-    # otherwise return candidates for agent to decide
-    return {"candidates": candidates[:5], "best_match": best, "auto_act_performed": False, "message": "Candidates returned"}
+    # Return top candidates for agent clarification
+    return {"candidates": candidates[:5], "best_match": best_candidate, "auto_act_performed": False, "message": "Candidates returned"}
 
 
 def create_response(message, api_path, action_group, http_method, status_code=200):
@@ -384,73 +418,3 @@ def create_response(message, api_path, action_group, http_method, status_code=20
         "sessionAttributes": {},
         "promptSessionAttributes": {}
     }
-'''
-if __name__ == "__main__":
-    # Test all 4 tools locally
-    print("=== Testing add_meal ===")
-    test_event = {
-        'function': 'add_meal',
-        'parameters': {
-            'name': 'Test Chicken',
-            'calories': 300,
-            'protein': 30,
-            'carbs': 5,
-            'fat': 10
-        }
-    }
-    result = lambda_handler(test_event, None)
-    print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
-    
-    print("\n=== Testing get_meals ===")
-    test_event = {
-        'function': 'get_meals',
-        'parameters': {}
-    }
-    result = lambda_handler(test_event, None)
-    meals_response = result['response']['functionResponse']['responseBody']['TEXT']['body']
-    print(meals_response)
-
-    # Extract meal ID for modify/delete tests (assuming format "ID: X - ...")
-    if "ID:" in meals_response:
-        meal_id = meals_response.split("ID: ")[1].split(" ")[0]
-        
-        print(f"\n=== Testing modify_meal (ID: {meal_id}) ===")
-        test_event = {
-            'function': 'modify_meal',
-            'parameters': {
-                'meal_id': int(meal_id),
-                'name': 'Modified Chicken',
-                'calories': 350
-            }
-        }
-        result = lambda_handler(test_event, None)
-        print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
-        
-        print("\n=== Testing get_meals after modify ===")
-        test_event = {
-            'function': 'get_meals',
-            'parameters': {}
-        }
-        result = lambda_handler(test_event, None)
-        print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
-
-        print(f"\n=== Testing delete_meal (ID: {meal_id}) ===")
-        test_event = {
-            'function': 'delete_meal',
-            'parameters': {
-                'meal_id': int(meal_id)
-            }
-        }
-        result = lambda_handler(test_event, None)
-        print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
-        
-        print("\n=== Testing get_meals after delete ===")
-        test_event = {
-            'function': 'get_meals',
-            'parameters': {}
-        }
-        result = lambda_handler(test_event, None)
-        print(result['response']['functionResponse']['responseBody']['TEXT']['body'])
-    else:
-        print("\nNo meals found to test modify/delete")
-'''
