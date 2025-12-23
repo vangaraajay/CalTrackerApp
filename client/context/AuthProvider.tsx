@@ -47,6 +47,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  useEffect(() => {
+    // debug: confirm provider mounted
+    console.log('[AuthProvider] mounted, user:', user?.id ?? null);
+  }, [user]);
+
   const signIn = async (email: string, password: string) => {
     return supabase.auth.signInWithPassword({ email, password });
   };
@@ -67,9 +72,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+  try {
+    const ctx = useContext(AuthContext);
+    if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+    return ctx;
+  } catch (err) {
+    // Add extra diagnostic info to help track invalid hook call sources
+    console.error('[useAuth] hook error - make sure useAuth is called from a React component within AuthProvider. Error:', err);
+    throw err;
+  }
 }
 
 export default AuthProvider;

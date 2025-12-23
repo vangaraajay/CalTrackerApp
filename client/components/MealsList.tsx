@@ -1,6 +1,7 @@
 import { supabase } from '@/constants/supabase';
 import { useState, useEffect } from 'react';
 import { Alert, StyleSheet, Text, View, FlatList, TouchableOpacity } from 'react-native';
+import { useAuth } from '@/context/AuthProvider';
 
 interface MealsListProps {
   refreshTrigger: number;
@@ -10,11 +11,18 @@ interface MealsListProps {
 
 export default function MealsList({ refreshTrigger, onEdit, onMealDeleted }: MealsListProps) {
   const [meals, setMeals] = useState<any[]>([]);
+  const { user } = useAuth();
 
   const fetchMeals = async () => {
+    if (!user) {
+      setMeals([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('Meals')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -25,10 +33,16 @@ export default function MealsList({ refreshTrigger, onEdit, onMealDeleted }: Mea
   };
 
   const deleteMeal = async (id: number) => {
+    if (!user) {
+      Alert.alert('Authentication required', 'Please sign in to delete meals.');
+      return;
+    }
+
     const { error } = await supabase
       .from('Meals')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id);
 
     if (error) {
       Alert.alert('Error', 'Failed to delete meal');

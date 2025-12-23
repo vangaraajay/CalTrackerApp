@@ -1,6 +1,7 @@
 import { supabase } from '@/constants/supabase';
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { useAuth } from '@/context/AuthProvider';
 
 interface PastCaloriesProps {
   refreshTrigger: number;
@@ -8,11 +9,18 @@ interface PastCaloriesProps {
 
 export default function PastCalories({ refreshTrigger }: PastCaloriesProps) {
   const [pastRecords, setPastRecords] = useState<any[]>([]);
+  const { user } = useAuth();
 
   const fetchPastHistory = async () => {
+    if (!user) {
+      setPastRecords([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('CalTracker')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(30);
 
@@ -34,7 +42,7 @@ export default function PastCalories({ refreshTrigger }: PastCaloriesProps) {
 
   useEffect(() => {
     fetchPastHistory();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, user]);
 
   return (
     <View style={styles.container}>

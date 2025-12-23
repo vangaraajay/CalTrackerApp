@@ -17,6 +17,7 @@ export default function AddMeals({ visible, onClose, onMealAdded, editMeal }: Ad
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const { user } = useAuth();
 
   // Pre-fill form when editing
   useEffect(() => {
@@ -44,11 +45,24 @@ export default function AddMeals({ visible, onClose, onMealAdded, editMeal }: Ad
       return;
     }
 
-    const { user } = useAuth();
-
     if (!user) {
       Alert.alert('Authentication required', 'Please sign in to add meals.');
       return;
+    }
+
+    // Ensure Supabase has a valid session/token for RLS checks
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userInfo = await supabase.auth.getUser();
+      console.log('[AddMeals] user.id', user.id, 'session?', !!sessionData?.session);
+      console.log('[AddMeals] session partial token:', sessionData?.session?.access_token?.slice(0, 20));
+      console.log('[AddMeals] supabase.getUser()', userInfo);
+      if (!sessionData?.session) {
+        Alert.alert('Authentication required', 'No active session found. Please sign in again.');
+        return;
+      }
+    } catch (err) {
+      console.error('[AddMeals] failed to get session', err);
     }
 
     const caloriesNum = parseInt(calories);
@@ -107,8 +121,10 @@ export default function AddMeals({ visible, onClose, onMealAdded, editMeal }: Ad
     }
 
     if (error) {
+      console.error('[AddMeals] supabase error:', error, 'data:', data);
       Alert.alert('Error', error.message);
     } else {
+      console.log('[AddMeals] supabase response data:', data);
       Alert.alert('Success', isEditing ? 'Meal updated!' : 'Meal added!');
       setFoodName('');
       setCalories('');

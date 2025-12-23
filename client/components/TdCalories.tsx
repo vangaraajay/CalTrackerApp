@@ -1,6 +1,7 @@
 import { supabase } from '@/constants/supabase';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
+import { useAuth } from '@/context/AuthProvider';
 
 interface TdCaloriesProps {
   refreshTrigger: number;
@@ -8,11 +9,18 @@ interface TdCaloriesProps {
 
 export default function TdCalories({ refreshTrigger }: TdCaloriesProps) {
   const [dailyRecords, setDailyRecords] = useState<any[]>([]);
+  const { user } = useAuth();
 
   const fetchDailyHistory = async () => {
+    if (!user) {
+      setDailyRecords([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('CalTracker')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1);
 
@@ -34,7 +42,7 @@ export default function TdCalories({ refreshTrigger }: TdCaloriesProps) {
 
   useEffect(() => {
     fetchDailyHistory();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, user]);
 
   return (
     <View style={styles.container}>

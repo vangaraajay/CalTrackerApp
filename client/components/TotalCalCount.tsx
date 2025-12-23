@@ -1,6 +1,7 @@
 import { supabase } from '@/constants/supabase';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
+import { useAuth } from '@/context/AuthProvider';
 import { triggerDailyRefresh } from '@/hooks/dailyCountRefresh';
 
 interface TotalCalCountProps {
@@ -14,13 +15,20 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
     carbs: 0,
     fat: 0
   });
+  const { user } = useAuth();
 
   const fetchTodaysTotals = async () => {
+    console.log('[TotalCalCount] fetchTodaysTotals called, refreshTrigger:', refreshTrigger, 'user:', user?.id ?? null);
     const today = new Date().toISOString().split('T')[0];
-    
+    if (!user) {
+      setTotals({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+      return;
+    }
+
     const { data, error } = await supabase
       .from('Meals')
       .select('calories, protein, carbs, fat')
+      .eq('user_id', user.id)
       .gte('created_at', `${today}T00:00:00`)
       .lt('created_at', `${today}T23:59:59`);
 
@@ -46,9 +54,12 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
     const today = new Date().toISOString().split('T')[0];
     
     // Check if there's already a record for today
+    if (!user) return;
+
     const { data: existingRecords, error: fetchError } = await supabase
       .from('CalTracker')
       .select('id')
+      .eq('user_id', user.id)
       .gte('created_at', `${today}T00:00:00`)
       .lt('created_at', `${today}T23:59:59`);
 
@@ -69,7 +80,8 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
           carbs: dailyTotals.carbs,
           fat: dailyTotals.fat
         })
-        .eq('id', existingRecord.id));
+        .eq('id', existingRecord.id)
+        .eq('user_id', user.id));
     } else {
       ({ data, error } = await supabase
         .from('CalTracker')
@@ -77,7 +89,8 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
           calories: dailyTotals.calories,
           protein: dailyTotals.protein,
           carbs: dailyTotals.carbs,
-          fat: dailyTotals.fat
+          fat: dailyTotals.fat,
+          user_id: user.id
         }));
     }
 
