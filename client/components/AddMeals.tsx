@@ -1,5 +1,6 @@
 import { supabase } from '@/constants/supabase';
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthProvider';
 import { Alert, Button, StyleSheet, Text, TextInput, View, Modal, TouchableOpacity } from 'react-native';
 
 interface AddMealsProps {
@@ -43,6 +44,13 @@ export default function AddMeals({ visible, onClose, onMealAdded, editMeal }: Ad
       return;
     }
 
+    const { user } = useAuth();
+
+    if (!user) {
+      Alert.alert('Authentication required', 'Please sign in to add meals.');
+      return;
+    }
+
     const caloriesNum = parseInt(calories);
     const proteinNum = parseInt(protein) || 0;
     const carbsNum = parseInt(carbs) || 0;
@@ -79,9 +87,11 @@ export default function AddMeals({ visible, onClose, onMealAdded, editMeal }: Ad
           calories: caloriesNum,
           protein: proteinNum,
           carbs: carbsNum,
-          fat: fatNum
+          fat: fatNum,
+          user_id: user.id
         })
-        .eq('id', editMeal.id));
+        .eq('id', editMeal.id)
+        .eq('user_id', user.id));
     } else {
       // Insert new meal
       ({ data, error } = await supabase
@@ -91,7 +101,8 @@ export default function AddMeals({ visible, onClose, onMealAdded, editMeal }: Ad
           calories: caloriesNum,
           protein: proteinNum,
           carbs: carbsNum,
-          fat: fatNum
+          fat: fatNum,
+          user_id: user.id
         }));
     }
 
