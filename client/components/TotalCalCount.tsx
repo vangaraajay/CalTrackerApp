@@ -64,6 +64,7 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
       .lt('created_at', `${today}T23:59:59`);
 
     if (fetchError) {
+      console.log('Error fetching CalTracker record:', fetchError);
       return;
     }
 
@@ -92,6 +93,10 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
           fat: dailyTotals.fat,
           user_id: user.id
         }));
+      if (error){
+        console.error('Error inserting new record:', error);
+      }
+      console.log(`Inserting new record: ${data}`);
     }
 
     if (!error) {
