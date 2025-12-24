@@ -24,16 +24,9 @@ def lambda_handler(event, context):
     print(f'Event: {json.dumps(event, indent=2)}')
 
     # SECURITY: Extract user_id from session attributes (passed by Agent Lambda after token verification)
-    user_id = None
     session_state = event.get('sessionState', {})
     session_attributes = session_state.get('sessionAttributes', {})
     user_id = session_attributes.get('user_id')
-    
-    # Fallback: try to get from event directly (for testing only)
-    if not user_id:
-        user_id = event.get('user_id')
-        if user_id:
-            print("WARNING: Using user_id directly from event (testing mode)")
     
     if not user_id:
         api_path = event.get("apiPath") or ""

@@ -1,51 +1,95 @@
 import os
 import boto3
 import json
-import uuid
+from datetime import datetime, timezone
 from dotenv import load_dotenv
-from supabase import create_client, Client
+import jwt
+from jwt.exceptions import InvalidTokenError, ExpiredSignatureError, DecodeError, InvalidAudienceError
 
 # Load environment variables
 load_dotenv()
 
-bedrock_agent = boto3.client('bedrock-agent-runtime', region_name='us-east-2')
+# Get region from environment variable, default to us-east-2
+# Note: In Lambda, AWS_REGION is automatically set by AWS
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-2')
+bedrock_agent = boto3.client('bedrock-agent-runtime', region_name=AWS_REGION)
 
 
 def verify_access_token(access_token: str) -> dict:
     """
-    Verify Supabase JWT access token and extract user information.
-    Returns dict with 'user_id' and 'user' if valid, raises exception if invalid.
+    Verify Supabase JWT access token locally using JWT_SECRET.
+    Returns dict with 'user_id' if valid, raises exception if invalid.
+    Uses local JWT verification (no API call to Supabase) for better performance.
+    Validates audience claim for security.
     """
     if not access_token:
         raise ValueError("Access token is required")
     
-    # Get Supabase URL and anon key from environment
-    supabase_url = os.environ.get('DB_API_URL')
-    supabase_anon_key = os.environ.get('DB_API_KEY')  # Anon key works for token verification
+    jwt_secret = os.environ.get('JWT_SECRET')
+    if not jwt_secret:
+        raise ValueError("JWT_SECRET not configured")
     
-    if not supabase_url or not supabase_anon_key:
-        raise ValueError("Supabase credentials not configured")
+    # Expected audience - Supabase access tokens use "authenticated"
+    # Can be overridden via environment variable if needed
+    expected_audience = os.environ.get('JWT_AUDIENCE', 'authenticated')
     
-    # Create Supabase client
-    supabase: Client = create_client(supabase_url, supabase_anon_key)
-    
-    # Verify the token by getting the user
-    # This will raise an exception if the token is invalid
     try:
-        user_response = supabase.auth.get_user(access_token)
-        user = user_response.user
+        # Verify and decode the JWT token
+        # Supabase uses HS256 algorithm by default
+        payload = jwt.decode(
+            access_token,
+            jwt_secret,
+            algorithms=['HS256'],
+            audience=expected_audience,  # Validate audience claim
+            options={
+                'verify_signature': True,
+                'verify_exp': True,  # Verify expiration
+                'verify_nbf': True,  # Verify not before
+                'require': ['sub']   # Require 'sub' claim (user_id)
+            }
+        )
         
-        if not user or not user.id:
-            raise ValueError("Invalid user data from token")
+        # Extract user_id from 'sub' claim (Supabase stores user_id in 'sub')
+        user_id = payload.get('sub')
+        
+        if not user_id:
+            raise ValueError("User ID not found in token")
         
         return {
-            'user_id': user.id,
-            'user': user
+            'user_id': user_id,
+            'payload': payload
         }
+        
+    except ExpiredSignatureError:
+        print("Token has expired")
+        raise ValueError("Token has expired") from None
+    except InvalidAudienceError:
+        print(f"Invalid audience - expected '{expected_audience}'")
+        raise ValueError("Invalid token audience") from None
+    except DecodeError as e:
+        print(f"Token decode error: {str(e)}")
+        raise ValueError("Invalid token format") from None
+    except InvalidTokenError as e:
+        print(f"Token validation failed: {str(e)}")
+        raise ValueError("Invalid or expired access token") from None
     except Exception as e:
-        # Log the error but don't expose details
-        print(f"Token verification failed: {str(e)}")
-        raise ValueError("Invalid or expired access token") from e
+        print(f"Unexpected error during token verification: {str(e)}")
+        raise ValueError("Invalid or expired access token") from None
+
+
+def get_session_id(user_id: str) -> str:
+    """
+    Generate a deterministic session ID based on user_id and current date (UTC).
+    This ensures conversation continuity: same user gets the same session ID throughout the day.
+    Session ID format: {user_id}-{YYYY-MM-DD}
+    
+    This allows the Bedrock Agent to maintain conversation context across multiple requests
+    from the same user on the same day.
+    
+    Note: Uses UTC date to ensure consistency across timezones.
+    """
+    today = datetime.now(timezone.utc).date().isoformat()  # UTC date, returns YYYY-MM-DD
+    return f"{user_id}-{today}"
 
 
 def lambda_handler(event, context):
@@ -56,12 +100,34 @@ def lambda_handler(event, context):
     try:
         # Parse request body
         if isinstance(event.get('body'), str):
-            body = json.loads(event['body'])
+            try:
+                body = json.loads(event['body'])
+            except json.JSONDecodeError:
+                return {
+                    'statusCode': 400,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'error': 'Invalid JSON in request body'})
+                }
         else:
             body = event.get('body', {})
         
         message = body.get('message', '')
         access_token = body.get('access_token')
+        
+        # Validate message length to prevent DoS attacks
+        MAX_MESSAGE_LENGTH = 10000  # 10KB max message length
+        if len(message) > MAX_MESSAGE_LENGTH:
+            return {
+                'statusCode': 400,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'error': f'Message too long (max {MAX_MESSAGE_LENGTH} characters)'})
+            }
         
         if not access_token:
             return {
@@ -101,9 +167,8 @@ def lambda_handler(event, context):
                 'body': json.dumps({'error': 'Agent ID not configured'})
             }
         
-        # Use user_id as part of session ID for consistency
-        # This ensures each user gets their own session context
-        session_id = f"{user_id}-{str(uuid.uuid4())}"
+        # Generate deterministic session ID (same per user per day for conversation continuity)
+        session_id = get_session_id(user_id)
         
         # Pass verified user_id via session attributes so it's available to tools
         # Since we've already verified the token, user_id is trusted at this point
@@ -121,13 +186,40 @@ def lambda_handler(event, context):
             }
         )
         
-        # Extract response from stream
+        # Extract response from stream with error handling
         result = ""
-        for event in response['completion']:
-            if 'chunk' in event:
-                chunk = event['chunk']
-                if 'bytes' in chunk:
-                    result += chunk['bytes'].decode('utf-8')
+        try:
+            completion = response.get('completion', [])
+            if not completion:
+                return {
+                    'statusCode': 500,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'error': 'Empty response from agent'})
+                }
+            
+            for event in completion:
+                if 'chunk' in event:
+                    chunk = event['chunk']
+                    if 'bytes' in chunk:
+                        try:
+                            result += chunk['bytes'].decode('utf-8')
+                        except UnicodeDecodeError as e:
+                            print(f"Unicode decode error: {e}")
+                            # Continue processing other chunks
+                            continue
+        except KeyError as e:
+            print(f"Missing key in response: {e}")
+            return {
+                'statusCode': 500,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'error': 'Invalid response format from agent'})
+            }
         
         return {
             'statusCode': 200,
@@ -158,20 +250,25 @@ def queryAgent(message, agent_id, agent_alias_id='TSTALIASID', access_token=None
     If access_token is provided, it will be verified. If user_id is provided directly,
     it will be used (useful for testing, but less secure).
     """
-    session_id = str(uuid.uuid4())
     session_attributes = {}
     
     # If access_token provided, verify it
     if access_token:
         try:
             token_data = verify_access_token(access_token)
-            session_attributes['user_id'] = token_data['user_id']
+            user_id = token_data['user_id']
+            session_attributes['user_id'] = user_id
         except Exception as e:
             raise ValueError(f"Token verification failed: {str(e)}") from e
     elif user_id:
         # For testing/backward compatibility - less secure
         session_attributes['user_id'] = user_id
         print("WARNING: Using user_id directly without token verification")
+    else:
+        raise ValueError("Either access_token or user_id must be provided")
+    
+    # Generate deterministic session ID (same per user per day for conversation continuity)
+    session_id = get_session_id(user_id)
     
     response = bedrock_agent.invoke_agent(
         agentId=agent_id,
@@ -191,7 +288,3 @@ def queryAgent(message, agent_id, agent_alias_id='TSTALIASID', access_token=None
                 result += chunk['bytes'].decode('utf-8')
     
     return result
-
-if __name__ == "__main__":
-    agent_id = os.environ.get('BEDROCK_AGENT_ID')
-    print(queryAgent("Answer 1 + 1", agent_id))
