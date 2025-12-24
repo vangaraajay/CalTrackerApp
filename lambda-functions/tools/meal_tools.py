@@ -23,6 +23,30 @@ def lambda_handler(event, context):
     """Main Lambda handler for Bedrock Agent tools"""
     print(f'Event: {json.dumps(event, indent=2)}')
 
+    # SECURITY: Extract user_id from session attributes (passed by Agent Lambda after token verification)
+    user_id = None
+    session_state = event.get('sessionState', {})
+    session_attributes = session_state.get('sessionAttributes', {})
+    user_id = session_attributes.get('user_id')
+    
+    # Fallback: try to get from event directly (for testing only)
+    if not user_id:
+        user_id = event.get('user_id')
+        if user_id:
+            print("WARNING: Using user_id directly from event (testing mode)")
+    
+    if not user_id:
+        api_path = event.get("apiPath") or ""
+        action_group = event.get("actionGroup", "")
+        http_method = event.get("httpMethod", "POST")
+        return create_response(
+            "Error: user_id not found in session. Authentication required.",
+            api_path,
+            action_group,
+            http_method,
+            status_code=401
+        )
+
     # normalize event keys: Bedrock agent variations may use different keys
     api_path = event.get("apiPath") or event.get("path")
     # older/local tests may send 'function' names like 'add_meal'
@@ -41,20 +65,20 @@ def lambda_handler(event, context):
     http_method = event.get("httpMethod", "POST")
     # Normalize parameters coming from various Bedrock agent shapes
     parameters = normalize_parameters(event)
-    print(f"Normalized parameters: {parameters}")
+    print(f"Normalized parameters: {parameters}, user_id: {user_id}")
 
     try:
-        # Determine which tool to call based on apiPath
+        # Determine which tool to call based on apiPath - pass user_id for security
         if api_path == "/findMealByName":
-            message = find_meal_by_name(parameters)
+            message = find_meal_by_name(parameters, user_id)
         elif api_path == "/addMeal":
-            message = add_meal(parameters)
+            message = add_meal(parameters, user_id)
         elif api_path == "/deleteMeal":
-            message = delete_meal(parameters)
+            message = delete_meal(parameters, user_id)
         elif api_path == "/modifyMeal":
-            message = modify_meal(parameters)
+            message = modify_meal(parameters, user_id)
         elif api_path == "/getMeals":
-            message = get_meals(parameters)
+            message = get_meals(parameters, user_id)
         else:
             message = "Function not found"
 
@@ -69,7 +93,7 @@ def lambda_handler(event, context):
         return create_response(f"Error: {str(e)}\n{tb}", api_path, action_group, http_method, status_code=500)
 
 
-def add_meal(params):
+def add_meal(params, user_id):
     # Validate required parameters
     missing = []
     if not params.get("name"):
@@ -80,12 +104,14 @@ def add_meal(params):
         return f"Missing required parameters: {', '.join(missing)}"
 
     try:
+        # SECURITY: Always include user_id to ensure meals are associated with the authenticated user
         payload = {
             "meal_name": params.get("name"),
             "calories": params.get("calories"),
             "protein": params.get("protein"),
             "carbs": params.get("carbs"),
-            "fat": params.get("fat")
+            "fat": params.get("fat"),
+            "user_id": user_id
         }
         response = supabase.table("Meals").insert(payload).execute()
         err = getattr(response, "error", None)
@@ -232,15 +258,23 @@ def normalize_parameters(event: dict):
     return {}
 
 
-def delete_meal(params):
+def delete_meal(params, user_id):
     meal_id = params.get("meal_id")
     if meal_id is None:
         return "Missing required parameter: meal_id"
     try:
-        response = supabase.table("Meals").delete().eq("id", meal_id).execute()
+        # SECURITY: Filter by user_id to ensure users can only delete their own meals
+        response = supabase.table("Meals").delete()\
+            .eq("id", meal_id)\
+            .eq("user_id", user_id)\
+            .execute()
         err = getattr(response, "error", None)
         if err:
             return f"DB error deleting meal: {err}"
+        # Check if any rows were deleted
+        data = getattr(response, "data", None)
+        if not data:
+            return f"Meal with ID {meal_id} not found or you don't have permission to delete it"
         return f"Deleted meal with ID {meal_id}"
     except Exception as e:
         tb = traceback.format_exc()
@@ -248,7 +282,7 @@ def delete_meal(params):
         return f"Exception deleting meal: {str(e)}"
 
 
-def modify_meal(params):
+def modify_meal(params, user_id):
     meal_id = params.get("meal_id")
     if meal_id is None:
         return "Missing required parameter: meal_id"
@@ -266,10 +300,18 @@ def modify_meal(params):
     if not update_data:
         return "No fields provided to update"
     try:
-        response = supabase.table("Meals").update(update_data).eq("id", meal_id).execute()
+        # SECURITY: Filter by user_id to ensure users can only modify their own meals
+        response = supabase.table("Meals").update(update_data)\
+            .eq("id", meal_id)\
+            .eq("user_id", user_id)\
+            .execute()
         err = getattr(response, "error", None)
         if err:
             return f"DB error modifying meal: {err}"
+        # Check if any rows were updated
+        data = getattr(response, "data", None)
+        if not data:
+            return f"Meal with ID {meal_id} not found or you don't have permission to modify it"
         return f"Modified meal with ID {meal_id}"
     except Exception as e:
         tb = traceback.format_exc()
@@ -277,14 +319,16 @@ def modify_meal(params):
         return f"Exception modifying meal: {str(e)}"
 
 
-def get_meals(params):
+def get_meals(params, user_id):
     today_utc = datetime.now(timezone.utc)
     start_of_day = today_utc.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = today_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     try:
+        # SECURITY: Filter by user_id to only get the authenticated user's meals
         response = supabase.table("Meals")\
             .select("id, meal_name, calories, protein, carbs, fat, created_at")\
+            .eq("user_id", user_id)\
             .gte("created_at", start_of_day.isoformat())\
             .lte("created_at", end_of_day.isoformat())\
             .execute()
@@ -318,7 +362,7 @@ def _token_jaccard(a: str, b: str) -> float:
     union = ta.union(tb)
     return len(inter) / len(union) if union else 0.0
 
-def find_meal_by_name(params):
+def find_meal_by_name(params, user_id):
     """Find today's meals that best match `params['name']`.
 
     Returns structured candidates with scores. If `action` and `auto_confirm_threshold`
@@ -332,14 +376,16 @@ def find_meal_by_name(params):
     threshold = float(params.get("auto_confirm_threshold", 0.85))
     update_fields = params.get("update_fields") or {}
 
-    # fetch today's meals (structured)
+    # fetch today's meals (filtered by user_id for security)
     today_utc = datetime.now(timezone.utc)
     start_of_day = today_utc.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = today_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     try:
+        # SECURITY: Filter by user_id to only search the authenticated user's meals
         response = supabase.table("Meals")\
             .select("id, meal_name, calories, protein, carbs, fat, created_at")\
+            .eq("user_id", user_id)\
             .gte("created_at", start_of_day.isoformat())\
             .lte("created_at", end_of_day.isoformat())\
             .execute()
@@ -388,12 +434,12 @@ def find_meal_by_name(params):
     # Auto-act if requested
     if action and best_candidate and best_score >= threshold:
         if action == "delete":
-            msg = delete_meal({"meal_id": best_candidate["id"]})
+            msg = delete_meal({"meal_id": best_candidate.get("id")}, user_id)
             return {"candidates": candidates[:5], "best_match": best_candidate, "auto_act_performed": True, "message": msg}
         elif action == "modify":
-            params_for_modify = {"meal_id": best_candidate["id"]}
+            params_for_modify = {"meal_id": best_candidate.get("id")}
             params_for_modify.update(update_fields or {})
-            msg = modify_meal(params_for_modify)
+            msg = modify_meal(params_for_modify, user_id)
             return {"candidates": candidates[:5], "best_match": best_candidate, "auto_act_performed": True, "message": msg}
 
     # Return top candidates for agent clarification
