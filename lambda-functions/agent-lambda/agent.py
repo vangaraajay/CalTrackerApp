@@ -2,12 +2,12 @@ import os
 import boto3
 import json
 from datetime import datetime, timezone
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError, DecodeError, InvalidAudienceError
 
 # Load environment variables
-load_dotenv()
+# load_dotenv()
 
 # Get region from environment variable, default to us-east-2
 # Note: In Lambda, AWS_REGION is automatically set by AWS

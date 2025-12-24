@@ -13,6 +13,19 @@ provider "aws" {
     region = "us-east-2"
 }
 
+# Variables for meal_tools Lambda environment
+variable "db_api_url" {
+    description = "Supabase database API URL"
+    type        = string
+    sensitive   = true
+}
+
+variable "db_api_key" {
+    description = "Supabase service role key (for database operations)"
+    type        = string
+    sensitive   = true
+}
+
 resource "aws_iam_role" "tools_lambda_role" {
     name = "bedrock-tools-lambda-role"
 
@@ -44,6 +57,13 @@ resource "aws_lambda_function" "tools" {
 
     timeout     = 60
     memory_size = 512
+
+    environment {
+        variables = {
+            DB_API_URL = var.db_api_url
+            DB_API_KEY = var.db_api_key
+        }
+    }
 }
 
 resource "aws_lambda_permission" "allow_bedrock" {
