@@ -15,8 +15,8 @@ function AuthGate() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      // send to login if not signed in
-      router.replace('/login');
+      // send to sign-in if not signed in
+      router.replace('/sign-in');
     } else {
       // user signed in, go to root tabs
       router.replace('/');
@@ -33,6 +33,8 @@ export default function RootLayout() {
       <>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+          <Stack.Screen name="sign-up" options={{ headerShown: false }} />
         </Stack>
       </>
       <StatusBar style="auto" />
