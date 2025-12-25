@@ -25,6 +25,12 @@ export default function TabLayout() {
           title: 'Daily Tracker',
         }}
       />
+      <Tabs.Screen
+        name="agent"
+        options={{
+          title: 'Agent',
+        }}
+      />
     </Tabs>
   );
 }
