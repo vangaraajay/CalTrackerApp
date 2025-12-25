@@ -8,7 +8,7 @@ type AuthContextType = {
   session: any | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<any>;
-  signUp: (email: string, password: string) => Promise<any>;
+  signUp: (email: string, password: string, name?: string) => Promise<any>;
   signOut: () => Promise<any>;
 };
 
@@ -56,8 +56,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return supabase.auth.signInWithPassword({ email, password });
   };
 
-  const signUp = async (email: string, password: string) => {
-    return supabase.auth.signUp({ email, password });
+  const signUp = async (email: string, password: string, name?: string) => {
+    const options: any = { email, password };
+    if (name) {
+      options.options = {
+        data: {
+          full_name: name,
+        },
+      };
+    }
+    return supabase.auth.signUp(options);
   };
 
   const signOut = async () => {

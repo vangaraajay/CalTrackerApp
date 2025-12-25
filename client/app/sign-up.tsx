@@ -1,18 +1,29 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  StyleSheet, 
+  Alert,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthProvider';
 
 export default function SignUpScreen() {
   const { signUp } = useAuth();
   const router = useRouter();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSignUp = async () => {
-    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
+    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
@@ -29,14 +40,14 @@ export default function SignUpScreen() {
 
     setLoading(true);
     try {
-      const res = await signUp(email, password);
+      const res = await signUp(email, password, name);
       if (res.error) {
         Alert.alert('Sign up error', res.error.message || JSON.stringify(res.error));
         return;
       }
       Alert.alert('Success', 'Account created! Please check your email for verification if enabled.');
-      // Optionally navigate to sign-in after successful sign up
-      router.push('/sign-in');
+      // Navigate back to sign-in (will slide from left)
+      router.back();
     } catch (err) {
       Alert.alert('Error', String(err));
     } finally {
@@ -45,76 +56,102 @@ export default function SignUpScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Sign Up</Text>
-      <Text style={styles.subtitle}>Create your Calorie Tracker account</Text>
-
-      <TextInput
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        style={styles.input}
-        autoCapitalize="none"
-        autoComplete="email"
-        editable={!loading}
-      />
-      <TextInput
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        style={styles.input}
-        autoComplete="password-new"
-        editable={!loading}
-      />
-      <TextInput
-        placeholder="Confirm Password"
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        secureTextEntry
-        style={styles.input}
-        autoComplete="password-new"
-        editable={!loading}
-      />
-
-      {password && confirmPassword && password !== confirmPassword && (
-        <Text style={styles.errorText}>Passwords do not match</Text>
-      )}
-
-      <TouchableOpacity
-        style={[
-          styles.button,
-          (loading || password !== confirmPassword) && styles.buttonDisabled,
-        ]}
-        onPress={handleSignUp}
-        disabled={loading || password !== confirmPassword}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.buttonText}>
-          {loading ? 'Creating account...' : 'Sign Up'}
-        </Text>
-      </TouchableOpacity>
+        <Text style={styles.title}>Sign Up</Text>
+        <Text style={styles.subtitle}>Create your Calorie Tracker account</Text>
 
-      <View style={styles.switchRow}>
-        <Text style={styles.switchText}>Already have an account? </Text>
-        <TouchableOpacity onPress={() => router.push('/sign-in')}>
-          <Text style={styles.switchLink}>Sign In</Text>
+        <TextInput
+          placeholder="Name"
+          placeholderTextColor="#666"
+          value={name}
+          onChangeText={setName}
+          style={styles.input}
+          autoCapitalize="words"
+          autoComplete="name"
+          editable={!loading}
+        />
+        <TextInput
+          placeholder="Email"
+          placeholderTextColor="#666"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          style={styles.input}
+          autoCapitalize="none"
+          autoComplete="email"
+          editable={!loading}
+        />
+        <TextInput
+          placeholder="Password"
+          placeholderTextColor="#666"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          style={styles.input}
+          autoComplete="password-new"
+          editable={!loading}
+        />
+        <TextInput
+          placeholder="Confirm Password"
+          placeholderTextColor="#666"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          secureTextEntry
+          style={styles.input}
+          autoComplete="password-new"
+          editable={!loading}
+        />
+
+        {password && confirmPassword && password !== confirmPassword && (
+          <Text style={styles.errorText}>Passwords do not match</Text>
+        )}
+
+        <TouchableOpacity
+          style={[
+            styles.button,
+            (loading || password !== confirmPassword || !name.trim()) && styles.buttonDisabled,
+          ]}
+          onPress={handleSignUp}
+          disabled={loading || password !== confirmPassword || !name.trim()}
+        >
+          <Text style={styles.buttonText}>
+            {loading ? 'Creating account...' : 'Sign Up'}
+          </Text>
         </TouchableOpacity>
-      </View>
 
-      <Text style={styles.hint}>
-        Password must be at least 6 characters long
-      </Text>
-    </View>
+        <View style={styles.switchRow}>
+          <Text style={styles.switchText}>Already have an account? </Text>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={styles.switchLink}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.hint}>
+          Password must be at least 6 characters long
+        </Text>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
+  },
+  scrollContent: {
+    flexGrow: 1,
     padding: 24,
     justifyContent: 'center',
-    backgroundColor: '#fff',
   },
   title: {
     fontSize: 32,
