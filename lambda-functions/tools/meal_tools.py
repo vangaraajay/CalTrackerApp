@@ -329,7 +329,7 @@ def get_meals(params, user_id):
 
     text = "Today's meals:\n"
     for meal in data:
-        text += f"ID: {meal['id']} - {meal['meal_name']}: {meal['calories']} cal, {meal['protein']}g protein, {meal['carbs']}g carbs, {meal['fat']}g fat\n"
+        text += f"{meal['meal_name']}: {meal['calories']} cal, {meal['protein']}g protein, {meal['carbs']}g carbs, {meal['fat']}g fat\n"
     return text
 
 
