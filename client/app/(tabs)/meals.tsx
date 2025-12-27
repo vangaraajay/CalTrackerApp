@@ -4,11 +4,19 @@ import TotalCalCount from '@/components/TotalCalCount';
 import MealsList from '@/components/MealsList';
 import AddMeals from '@/components/AddMeals';
 import { supabase } from '@/constants/supabase';
+import { useMealsRefresh } from '@/hooks/mealsRefresh';
 
 export default function MealsScreen() {
+  const globalRefreshTrigger = useMealsRefresh();
+  const [localRefreshTrigger, setLocalRefreshTrigger] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingMeal, setEditingMeal] = useState(null);
+
+  // Combine both triggers - update refreshTrigger when either global or local changes
+  useEffect(() => {
+    setRefreshTrigger(prev => prev + 1);
+  }, [globalRefreshTrigger, localRefreshTrigger]);
 
   const clearOldMeals = async () => {
     const today = new Date().toISOString().split('T')[0];
@@ -24,17 +32,17 @@ export default function MealsScreen() {
       
       if (lastMealDate !== today) {
         await supabase.from('Meals').delete().neq('id', 0);
-        setRefreshTrigger(prev => prev + 1);
+        setLocalRefreshTrigger(prev => prev + 1);
       }
     }
   };
 
   const handleMealAdded = () => {
-    setRefreshTrigger(prev => prev + 1); // Trigger refresh
+    setLocalRefreshTrigger(prev => prev + 1); // Trigger local refresh
   };
 
   const handleMealDeleted = () => {
-    setRefreshTrigger(prev => prev + 1); // Trigger refresh for totals
+    setLocalRefreshTrigger(prev => prev + 1); // Trigger local refresh for totals
   };
 
   const handleEdit = (meal: any) => {

@@ -11,6 +11,7 @@ import {
   Alert
 } from 'react-native';
 import { useAuth } from '@/context/AuthProvider';
+import { triggerMealsRefresh } from '@/hooks/mealsRefresh';
 
 const API_GATEWAY_URL = process.env.EXPO_PUBLIC_API_GATEWAY_URL || '';
 
@@ -112,6 +113,10 @@ export default function AgentChat() {
       };
 
       setMessages(prev => [...prev, agentMessage]);
+      
+      // Trigger refresh for meals list and calorie count after agent responds
+      // This ensures the UI updates if meals were added/modified/deleted via the agent
+      triggerMealsRefresh();
     } catch (error: any) {
       console.error('Error sending message:', error);
       const errorMsg = error.message || 'Failed to send message';
