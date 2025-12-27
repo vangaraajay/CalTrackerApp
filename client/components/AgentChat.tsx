@@ -67,6 +67,7 @@ export default function AgentChat() {
     try {
       // API_GATEWAY_URL from terraform output already includes /agent at the end
       const endpoint = API_GATEWAY_URL;
+      const localDate = new Date().toISOString().slice(0, 10);
       
       console.log('Sending request to:', endpoint);
       console.log('Request body:', { message: userMessage.text, hasToken: !!session.access_token });
@@ -79,6 +80,7 @@ export default function AgentChat() {
         body: JSON.stringify({
           message: userMessage.text,
           access_token: session.access_token,
+          local_date: localDate,
         }),
       });
 

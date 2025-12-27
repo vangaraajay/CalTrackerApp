@@ -76,21 +76,8 @@ def verify_access_token(access_token: str) -> dict:
         print(f"Unexpected error during token verification: {str(e)}")
         raise ValueError("Invalid or expired access token") from None
 
-
-def get_session_id(user_id: str) -> str:
-    """
-    Generate a deterministic session ID based on user_id and current date (UTC).
-    This ensures conversation continuity: same user gets the same session ID throughout the day.
-    Session ID format: {user_id}-{YYYY-MM-DD}
-    
-    This allows the Bedrock Agent to maintain conversation context across multiple requests
-    from the same user on the same day.
-    
-    Note: Uses UTC date to ensure consistency across timezones.
-    """
-    today = datetime.now(timezone.utc).date().isoformat()  # UTC date, returns YYYY-MM-DD
-    return f"{user_id}-{today}"
-
+def get_session_id(user_id: str, local_date: str) -> str:
+    return f"{user_id}-{local_date}"
 
 def lambda_handler(event, context):
     """
@@ -116,6 +103,7 @@ def lambda_handler(event, context):
         
         message = body.get('message', '')
         access_token = body.get('access_token')
+        local_date = body.get('local_date')
         
         # Validate message length to prevent DoS attacks
         MAX_MESSAGE_LENGTH = 10000  # 10KB max message length
@@ -168,7 +156,16 @@ def lambda_handler(event, context):
             }
         
         # Generate deterministic session ID (same per user per day for conversation continuity)
-        session_id = get_session_id(user_id)
+        if not local_date:
+            return {
+                'statusCode': 400,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'error': 'local_date is required'})
+            }
+        session_id = get_session_id(user_id, local_date)
         
         # Pass verified user_id via session attributes so it's available to tools
         # Since we've already verified the token, user_id is trusted at this point
@@ -247,49 +244,3 @@ def lambda_handler(event, context):
             },
             'body': json.dumps({'error': 'Internal server error'})
         }
-
-
-def queryAgent(message, agent_id, agent_alias_id='TSTALIASID', access_token=None, user_id=None):
-    """
-    Query Bedrock Agent with tool support (for backward compatibility or direct calls).
-    If access_token is provided, it will be verified. If user_id is provided directly,
-    it will be used (useful for testing, but less secure).
-    """
-    session_attributes = {}
-    
-    # If access_token provided, verify it
-    if access_token:
-        try:
-            token_data = verify_access_token(access_token)
-            user_id = token_data['user_id']
-            session_attributes['user_id'] = user_id
-        except Exception as e:
-            raise ValueError(f"Token verification failed: {str(e)}") from e
-    elif user_id:
-        # For testing/backward compatibility - less secure
-        session_attributes['user_id'] = user_id
-        print("WARNING: Using user_id directly without token verification")
-    else:
-        raise ValueError("Either access_token or user_id must be provided")
-    
-    # Generate deterministic session ID (same per user per day for conversation continuity)
-    session_id = get_session_id(user_id)
-    
-    response = bedrock_agent.invoke_agent(
-        agentId=agent_id,
-        agentAliasId=agent_alias_id,
-        sessionId=session_id,
-        inputText=message,
-        sessionState={
-            'sessionAttributes': session_attributes
-        } if session_attributes else None
-    )
-    
-    result = ""
-    for event in response['completion']:
-        if 'chunk' in event:
-            chunk = event['chunk']
-            if 'bytes' in chunk:
-                result += chunk['bytes'].decode('utf-8')
-    
-    return result

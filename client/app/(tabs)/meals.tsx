@@ -28,7 +28,7 @@ export default function MealsScreen() {
       .limit(1);
 
     if (lastMeal && lastMeal.length > 0) {
-      const lastMealDate = new Date(lastMeal[0].created_at).toISOString().split('T')[0];
+      const lastMealDate = new Date(lastMeal[0].created_at).toLocaleDateString('en-CA');
       
       if (lastMealDate !== today) {
         await supabase.from('Meals').delete().neq('id', 0);
