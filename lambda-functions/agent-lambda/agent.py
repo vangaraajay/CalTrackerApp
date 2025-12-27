@@ -176,14 +176,19 @@ def lambda_handler(event, context):
             'user_id': user_id
         }
         
+        session_state = {
+            'sessionAttributes': session_attributes
+        }
+        
+        print(f"Invoking Bedrock Agent with session_id: {session_id}, user_id: {user_id}")
+        print(f"Session state being passed: {json.dumps(session_state)}")
+        
         response = bedrock_agent.invoke_agent(
             agentId=agent_id,
             agentAliasId=agent_alias_id,
             sessionId=session_id,
             inputText=message,
-            sessionState={
-                'sessionAttributes': session_attributes
-            }
+            sessionState=session_state
         )
         
         # Extract response from stream with error handling

@@ -5,7 +5,6 @@ import SignOutButton from '@/components/SignOutButton';
 export default function AgentScreen() {
   return (
     <View style={styles.container}>
-      <SignOutButton />
       <View style={styles.chatContainer}>
         <AgentChat />
       </View>

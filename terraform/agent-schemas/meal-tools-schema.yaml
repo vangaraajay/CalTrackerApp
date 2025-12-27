@@ -27,9 +27,9 @@ paths:
                   example: "POST"
                 parameters:
                   type: object
-                  required: [name, calories]
+                  required: [meal_name, calories]
                   properties:
-                    name:
+                    meal_name:
                       type: string
                       example: "Chicken Salad"
                     calories:

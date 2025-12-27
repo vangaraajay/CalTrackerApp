@@ -24,9 +24,8 @@ def lambda_handler(event, context):
     print(f'Event: {json.dumps(event, indent=2)}')
 
     # SECURITY: Extract user_id from session attributes (passed by Agent Lambda after token verification)
-    session_state = event.get('sessionState', {})
-    session_attributes = session_state.get('sessionAttributes', {})
-    user_id = session_attributes.get('user_id')
+    session_attributes = event.get('sessionAttributes', {})
+    user_id = session_attributes.get('user_id') if isinstance(session_attributes, dict) else None
     
     if not user_id:
         api_path = event.get("apiPath") or ""
@@ -89,8 +88,8 @@ def lambda_handler(event, context):
 def add_meal(params, user_id):
     # Validate required parameters
     missing = []
-    if not params.get("name"):
-        missing.append("name")
+    if not params.get("meal_name"):
+        missing.append("meal_name")
     if params.get("calories") is None:
         missing.append("calories")
     if missing:
@@ -99,7 +98,7 @@ def add_meal(params, user_id):
     try:
         # SECURITY: Always include user_id to ensure meals are associated with the authenticated user
         payload = {
-            "meal_name": params.get("name"),
+            "meal_name": params.get("meal_name"),
             "calories": params.get("calories"),
             "protein": params.get("protein"),
             "carbs": params.get("carbs"),
@@ -110,7 +109,7 @@ def add_meal(params, user_id):
         err = getattr(response, "error", None)
         if err:
             return f"DB error adding meal: {err}"
-        return f"Added {params.get('name')} with {params.get('calories')} calories"
+        return f"Added {params.get('meal_name')} with {params.get('calories')} calories"
     except Exception as e:
         tb = traceback.format_exc()
         print(tb)
@@ -313,17 +312,12 @@ def modify_meal(params, user_id):
 
 
 def get_meals(params, user_id):
-    today_utc = datetime.now(timezone.utc)
-    start_of_day = today_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_day = today_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     try:
         # SECURITY: Filter by user_id to only get the authenticated user's meals
         response = supabase.table("Meals")\
             .select("id, meal_name, calories, protein, carbs, fat, created_at")\
             .eq("user_id", user_id)\
-            .gte("created_at", start_of_day.isoformat())\
-            .lte("created_at", end_of_day.isoformat())\
             .execute()
 
         data = getattr(response, "data", None)
@@ -369,18 +363,11 @@ def find_meal_by_name(params, user_id):
     threshold = float(params.get("auto_confirm_threshold", 0.85))
     update_fields = params.get("update_fields") or {}
 
-    # fetch today's meals (filtered by user_id for security)
-    today_utc = datetime.now(timezone.utc)
-    start_of_day = today_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_day = today_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
-
     try:
         # SECURITY: Filter by user_id to only search the authenticated user's meals
         response = supabase.table("Meals")\
             .select("id, meal_name, calories, protein, carbs, fat, created_at")\
             .eq("user_id", user_id)\
-            .gte("created_at", start_of_day.isoformat())\
-            .lte("created_at", end_of_day.isoformat())\
             .execute()
         rows = getattr(response, "data", []) or []
     except Exception as e:

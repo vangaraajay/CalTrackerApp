@@ -44,7 +44,11 @@ export default function AgentChat() {
     }
 
     if (!API_GATEWAY_URL) {
-      Alert.alert('Configuration error', 'API Gateway URL not configured.');
+      Alert.alert(
+        'Configuration error', 
+        'API Gateway URL not configured. Please set EXPO_PUBLIC_API_GATEWAY_URL in your environment variables.'
+      );
+      console.error('API_GATEWAY_URL is empty. Current value:', API_GATEWAY_URL);
       return;
     }
 
@@ -60,7 +64,13 @@ export default function AgentChat() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_GATEWAY_URL}/agent`, {
+      // API_GATEWAY_URL from terraform output already includes /agent at the end
+      const endpoint = API_GATEWAY_URL;
+      
+      console.log('Sending request to:', endpoint);
+      console.log('Request body:', { message: userMessage.text, hasToken: !!session.access_token });
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,15 +81,32 @@ export default function AgentChat() {
         }),
       });
 
-      const data = await response.json();
+      console.log('Response status:', response.status, response.statusText);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+      let data;
+      try {
+        const text = await response.text();
+        console.log('Response body (raw):', text);
+        data = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('Failed to parse response as JSON:', parseError);
+        throw new Error(`Server returned invalid JSON. Status: ${response.status}`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to get response from agent');
+        const errorMsg = data.error || `Server error: ${response.status} ${response.statusText}`;
+        console.error('API Error:', errorMsg, data);
+        throw new Error(errorMsg);
+      }
+
+      if (!data.response) {
+        throw new Error('No response field in server response');
       }
 
       const agentMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.response || 'No response from agent',
+        text: data.response,
         isUser: false,
         timestamp: new Date(),
       };
@@ -87,11 +114,12 @@ export default function AgentChat() {
       setMessages(prev => [...prev, agentMessage]);
     } catch (error: any) {
       console.error('Error sending message:', error);
-      Alert.alert('Error', error.message || 'Failed to send message');
+      const errorMsg = error.message || 'Failed to send message';
+      Alert.alert('Error', errorMsg);
       
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: `Error: ${error.message || 'Failed to send message'}`,
+        text: `Error: ${errorMsg}`,
         isUser: false,
         timestamp: new Date(),
       };
