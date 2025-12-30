@@ -101,20 +101,14 @@ resource "aws_lambda_permission" "allow_bedrock" {
   principal     = "bedrock.amazonaws.com"
 }
 
-resource "aws_bedrock_inference_profile" "claude3_haiku" {
-  name = "claude3-haiku-agent"
 
-  model_source {
-    copy_from = "anthropic.claude-3-haiku-20240307-v1:0"
-  }
-}
 
 resource "aws_bedrockagent_agent" "CalTrackerAgent" {
-  agent_name = "multi-tool-agent"
+  agent_name  = "multi-tool-agent"
   description = "Agent with multiple tools"
 
-  # Use the inference profile ARN
-  foundation_model = aws_bedrock_inference_profile.claude3_haiku.arn
+  # Directly reference the Nova Lite foundation model
+  foundation_model = "amazon.nova-lite-text-20240307-v1:0"
 
   instruction = <<EOF
 You are an agent that helps people track their calories and macros.
@@ -125,11 +119,9 @@ from their daily meal tracker.
 EOF
 
   agent_resource_role_arn = aws_iam_role.bedrock_agent_role.arn
-
-  depends_on = [
-    aws_bedrock_inference_profile.claude3_haiku
-  ]
 }
+
+
 
 resource "aws_bedrockagent_agent_action_group" "meals_tool" {
   agent_id      = aws_bedrockagent_agent.CalTrackerAgent.id
