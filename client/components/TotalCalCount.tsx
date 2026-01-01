@@ -1,5 +1,5 @@
 import { supabase } from '@/constants/supabase';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@/context/AuthProvider';
 import { triggerDailyRefresh } from '@/hooks/dailyCountRefresh';
@@ -16,6 +16,7 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
     fat: 0
   });
   const { user } = useAuth();
+  const isSavingRef = useRef(false);
 
   const fetchTodaysTotals = async () => {
     console.log('[TotalCalCount] fetchTodaysTotals called, refreshTrigger:', refreshTrigger, 'user:', user?.id ?? null);
@@ -51,56 +52,70 @@ export default function TotalCalCount({ refreshTrigger }: TotalCalCountProps) {
   };
 
   const saveDailyTotals = async (dailyTotals: typeof totals) => {
+    // Prevent concurrent saves to avoid race condition
+    if (isSavingRef.current) {
+      console.log('[TotalCalCount] Save already in progress, skipping...');
+      return;
+    }
+
     const today = new Date().toISOString().split('T')[0];
     
     // Check if there's already a record for today
     if (!user) return;
 
-    const { data: existingRecords, error: fetchError } = await supabase
-      .from('CalTracker')
-      .select('id')
-      .eq('user_id', user.id)
-      .gte('created_at', `${today}T00:00:00`)
-      .lt('created_at', `${today}T23:59:59`);
+    isSavingRef.current = true;
 
-    if (fetchError) {
-      console.log('Error fetching CalTracker record:', fetchError);
-      return;
-    }
-
-    const existingRecord = existingRecords && existingRecords.length > 0 ? existingRecords[0] : null;
-
-    let data, error;
-    
-    if (existingRecord) {
-      ({ data, error } = await supabase
+    try {
+      const { data: existingRecords, error: fetchError } = await supabase
         .from('CalTracker')
-        .update({
-          calories: dailyTotals.calories,
-          protein: dailyTotals.protein,
-          carbs: dailyTotals.carbs,
-          fat: dailyTotals.fat
-        })
-        .eq('id', existingRecord.id)
-        .eq('user_id', user.id));
-    } else {
-      ({ data, error } = await supabase
-        .from('CalTracker')
-        .insert({
-          calories: dailyTotals.calories,
-          protein: dailyTotals.protein,
-          carbs: dailyTotals.carbs,
-          fat: dailyTotals.fat,
-          user_id: user.id
-        }));
-      if (error){
-        console.error('Error inserting new record:', error);
+        .select('id')
+        .eq('user_id', user.id)
+        .gte('created_at', `${today}T00:00:00`)
+        .lt('created_at', `${today}T23:59:59`);
+
+      if (fetchError) {
+        console.log('Error fetching CalTracker record:', fetchError);
+        return;
       }
-      console.log(`Inserting new record: ${data}`);
-    }
 
-    if (!error) {
-      triggerDailyRefresh();
+      const existingRecord = existingRecords && existingRecords.length > 0 ? existingRecords[0] : null;
+
+      let data, error;
+      
+      if (existingRecord) {
+        ({ data, error } = await supabase
+          .from('CalTracker')
+          .update({
+            calories: dailyTotals.calories,
+            protein: dailyTotals.protein,
+            carbs: dailyTotals.carbs,
+            fat: dailyTotals.fat
+          })
+          .eq('id', existingRecord.id)
+          .eq('user_id', user.id));
+      } else {
+        ({ data, error } = await supabase
+          .from('CalTracker')
+          .insert({
+            calories: dailyTotals.calories,
+            protein: dailyTotals.protein,
+            carbs: dailyTotals.carbs,
+            fat: dailyTotals.fat,
+            user_id: user.id
+          }));
+        if (error){
+          console.error('Error inserting new record:', error);
+        }
+        console.log(`Inserting new record: ${data}`);
+      }
+
+      if (!error) {
+        triggerDailyRefresh();
+      }
+    } catch (error) {
+      console.error('Unexpected error in saveDailyTotals:', error);
+    } finally {
+      isSavingRef.current = false;
     }
   };
 
